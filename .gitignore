@@ -1,0 +1,25 @@
+# Java / Maven
+backend/target/
+backend/.mvn/
+*.class
+*.jar
+*.war
+
+# Environment
+**/.env
+**/.env.local
+
+# Node
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.vercel/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
