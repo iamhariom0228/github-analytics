@@ -87,9 +87,9 @@ public class AnalyticsService {
         String repoFilter = repoId != null ? "AND r.id = :repoId" : "";
 
         String sql = """
-            SELECT EXTRACT(DOW FROM c.committed_at AT TIME ZONE :tz)::int AS day,
-                   EXTRACT(HOUR FROM c.committed_at AT TIME ZONE :tz)::int AS hour,
-                   COUNT(*)::int AS count
+            SELECT CAST(EXTRACT(DOW FROM c.committed_at AT TIME ZONE :tz) AS int) AS day,
+                   CAST(EXTRACT(HOUR FROM c.committed_at AT TIME ZONE :tz) AS int) AS hour,
+                   CAST(COUNT(*) AS int) AS count
             FROM commits c
             JOIN tracked_repos r ON c.repo_id = r.id
             WHERE r.user_id = :userId
@@ -176,8 +176,8 @@ public class AnalyticsService {
         String sql = """
             SELECT c.author_login,
                    COUNT(*) AS commits,
-                   SUM(c.additions)::bigint AS lines_added,
-                   SUM(c.deletions)::bigint AS lines_removed
+                   CAST(SUM(c.additions) AS bigint) AS lines_added,
+                   CAST(SUM(c.deletions) AS bigint) AS lines_removed
             FROM commits c
             JOIN tracked_repos r ON c.repo_id = r.id
             WHERE r.user_id = :userId AND r.id = :repoId
