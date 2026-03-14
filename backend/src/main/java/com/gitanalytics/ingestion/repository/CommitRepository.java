@@ -13,6 +13,12 @@ import java.util.UUID;
 @Repository
 public interface CommitRepository extends JpaRepository<Commit, Long> {
 
+    long countByRepoId(UUID repoId);
+
+    @Modifying
+    @Query("DELETE FROM Commit c WHERE c.repo.id = :repoId")
+    void deleteByRepoId(UUID repoId);
+
     @Query("SELECT c FROM Commit c WHERE c.repo.user.id = :userId AND c.authorLogin = :login " +
            "AND c.committedAt BETWEEN :from AND :to ORDER BY c.committedAt DESC")
     List<Commit> findByUserAndAuthorAndDateRange(UUID userId, String login,

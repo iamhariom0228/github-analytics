@@ -2,6 +2,7 @@ package com.gitanalytics.ingestion.repository;
 
 import com.gitanalytics.ingestion.entity.PullRequest;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
@@ -14,6 +15,12 @@ import java.util.UUID;
 public interface PullRequestRepository extends JpaRepository<PullRequest, Long> {
 
     Optional<PullRequest> findByRepoIdAndPrNumber(UUID repoId, Integer prNumber);
+
+    List<PullRequest> findByRepoId(UUID repoId);
+
+    @Modifying
+    @Query("DELETE FROM PullRequest pr WHERE pr.repo.id = :repoId")
+    void deleteByRepoId(UUID repoId);
 
     @Query("SELECT pr FROM PullRequest pr WHERE pr.repo.user.id = :userId " +
            "AND pr.authorLogin = :login AND pr.createdAt BETWEEN :from AND :to")

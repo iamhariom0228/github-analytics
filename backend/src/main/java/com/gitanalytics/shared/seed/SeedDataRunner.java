@@ -7,9 +7,11 @@ import com.gitanalytics.auth.repository.UserRepository;
 import com.gitanalytics.ingestion.entity.*;
 import com.gitanalytics.ingestion.repository.*;
 import com.gitanalytics.shared.util.EncryptionUtil;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
@@ -29,15 +31,42 @@ public class SeedDataRunner implements CommandLineRunner {
     private final PullRequestRepository pullRequestRepository;
     private final PrReviewRepository prReviewRepository;
     private final EncryptionUtil encryptionUtil;
+    private final EntityManager em;
 
     private static final long DEMO_GITHUB_ID = 999_999L;
 
     @Override
+    @Transactional
     public void run(String... args) {
-        if (userRepository.findByGithubId(DEMO_GITHUB_ID).isPresent()) {
+        boolean fullySeeded = userRepository.findByGithubId(DEMO_GITHUB_ID)
+            .map(u -> {
+                List<com.gitanalytics.ingestion.entity.TrackedRepo> repos =
+                    trackedRepoRepository.findByUserId(u.getId());
+                if (repos.isEmpty()) return false;
+                long commitCount = commitRepository.countByRepoId(repos.get(0).getId());
+                return commitCount > 0;
+            }).orElse(false);
+
+        if (fullySeeded) {
             log.info("Demo seed data already exists — skipping.");
             return;
         }
+
+        // Partial seed detected — delete existing partial data so we start fresh
+        userRepository.findByGithubId(DEMO_GITHUB_ID).ifPresent(u -> {
+            log.info("Partial seed detected — cleaning up before re-seeding...");
+            trackedRepoRepository.findByUserId(u.getId())
+                .forEach(r -> {
+                    prReviewRepository.deleteByPullRequestRepoId(r.getId());
+                    pullRequestRepository.deleteByRepoId(r.getId());
+                    commitRepository.deleteByRepoId(r.getId());
+                    trackedRepoRepository.delete(r);
+                });
+            userPreferencesRepository.deleteByUserId(u.getId());
+            userRepository.delete(u);
+        });
+        em.flush();
+        em.clear();
 
         log.info("Seeding demo data for local development...");
 
@@ -89,7 +118,7 @@ public class SeedDataRunner implements CommandLineRunner {
                 TrackedRepo repo = rng.nextBoolean() ? repo1 : repo2;
                 commits.add(Commit.builder()
                     .repo(repo)
-                    .sha(UUID.randomUUID().toString().replace("-", "").substring(0, 40))
+                    .sha(UUID.randomUUID().toString().replace("-", "") + "00000000")
                     .authorLogin("demo-user")
                     .authorGithubId(DEMO_GITHUB_ID)
                     .messageSummary(pickRandom(COMMIT_MESSAGES, rng))
@@ -103,7 +132,7 @@ public class SeedDataRunner implements CommandLineRunner {
                 String teammate = pickRandom(TEAMMATES, rng);
                 commits.add(Commit.builder()
                     .repo(repo1)
-                    .sha(UUID.randomUUID().toString().replace("-", "").substring(0, 40))
+                    .sha(UUID.randomUUID().toString().replace("-", "") + "00000000")
                     .authorLogin(teammate)
                     .authorGithubId((long) teammate.hashCode())
                     .messageSummary(pickRandom(COMMIT_MESSAGES, rng))
