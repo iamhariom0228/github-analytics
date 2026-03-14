@@ -1,6 +1,7 @@
 package com.gitanalytics.ingestion.client;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gitanalytics.shared.config.AppProperties;
 import com.gitanalytics.shared.exception.GitHubApiException;
 import lombok.Data;
@@ -31,6 +32,7 @@ public class GitHubApiClient {
     private final WebClient.Builder webClientBuilder;
     private final RedisTemplate<String, Object> redisTemplate;
     private final AppProperties appProperties;
+    private final ObjectMapper objectMapper;
 
     public List<GitHubRepoDto> getUserRepos(String accessToken, UUID userId) {
         List<GitHubRepoDto> all = new ArrayList<>();
@@ -129,13 +131,12 @@ public class GitHubApiClient {
     private <T> List<T> get(String accessToken, UUID userId, String path, Class<T> type) {
         checkRateLimit(userId);
         try {
-            return (List<T>) webClientBuilder.build()
+            List<?> raw = webClientBuilder.build()
                 .get()
                 .uri(GITHUB_API_BASE + path)
                 .header("Authorization", "Bearer " + accessToken)
                 .header("Accept", "application/vnd.github+json")
                 .exchangeToMono(resp -> {
-                    // Track rate limit
                     String remaining = resp.headers().asHttpHeaders().getFirst("X-RateLimit-Remaining");
                     if (remaining != null) {
                         redisTemplate.opsForValue().set(
@@ -151,6 +152,10 @@ public class GitHubApiClient {
                     return Mono.error(new GitHubApiException("GitHub API returned " + e.getStatusCode()));
                 })
                 .block();
+            if (raw == null) return List.of();
+            return raw.stream()
+                .map(item -> objectMapper.convertValue(item, type))
+                .toList();
         } catch (GitHubApiException e) {
             throw e;
         } catch (Exception e) {
