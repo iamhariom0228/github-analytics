@@ -1,8 +1,8 @@
 package com.gitanalytics.ingestion.controller;
 
-import com.gitanalytics.ingestion.client.GitHubApiClient;
 import com.gitanalytics.ingestion.dto.AddRepoRequest;
 import com.gitanalytics.ingestion.dto.RepoDto;
+import com.gitanalytics.ingestion.dto.RepoSuggestionDto;
 import com.gitanalytics.ingestion.dto.SyncStatusDto;
 import com.gitanalytics.ingestion.service.RepoService;
 import com.gitanalytics.shared.util.ApiResponse;
@@ -66,9 +66,18 @@ public class RepoController {
     }
 
     @GetMapping("/suggestions")
-    public ResponseEntity<ApiResponse<List<GitHubApiClient.GitHubRepoDto>>> getSuggestions(
+    public ResponseEntity<ApiResponse<List<RepoSuggestionDto>>> getSuggestions(
             @AuthenticationPrincipal UserDetails principal) {
         UUID userId = UUID.fromString(principal.getUsername());
-        return ResponseEntity.ok(ApiResponse.ok(repoService.getSuggestions(userId)));
+        List<RepoSuggestionDto> suggestions = repoService.getSuggestions(userId).stream()
+            .map(r -> new RepoSuggestionDto(
+                r.getId(),
+                r.getName(),
+                r.getFullName(),
+                r.isPrivateRepo(),
+                r.getOwner() != null ? r.getOwner().getLogin() : null
+            ))
+            .toList();
+        return ResponseEntity.ok(ApiResponse.ok(suggestions));
     }
 }
