@@ -181,9 +181,9 @@ public class GitHubApiClient {
     public static class GitHubRepoDto {
         private Long id;
         private String name;
-        @JsonProperty("full_name")
+        @JsonProperty(value = "full_name", access = JsonProperty.Access.READ_ONLY)
         private String fullName;
-        @JsonProperty("private")
+        @JsonProperty(value = "private", access = JsonProperty.Access.READ_ONLY)
         private boolean privateRepo;
         private OwnerDto owner;
 
