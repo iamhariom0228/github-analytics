@@ -14,7 +14,7 @@ const statusColor: Record<string, string> = {
 };
 
 export default function ReposPage() {
-  const { data: repos, isLoading } = useRepos();
+  const { data: repos, isLoading, error } = useRepos();
   const addRepo = useAddRepo();
   const deleteRepo = useDeleteRepo();
   const triggerSync = useTriggerSync();
@@ -46,7 +46,11 @@ export default function ReposPage() {
         </button>
       </div>
 
-      {isLoading ? (
+      {error ? (
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center">
+          <p className="text-sm text-destructive">Failed to load repositories. Check your connection and try again.</p>
+        </div>
+      ) : isLoading ? (
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => (
             <div key={i} className="h-16 bg-muted animate-pulse rounded-xl" />

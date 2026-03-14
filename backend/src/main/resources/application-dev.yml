@@ -1,0 +1,12 @@
+# Dev profile overrides — loaded when SPRING_PROFILES_ACTIVE=dev
+app:
+  github:
+    # Allow startup without real OAuth credentials (demo login bypasses OAuth anyway)
+    client-id: ${GITHUB_CLIENT_ID:dev-placeholder}
+    client-secret: ${GITHUB_CLIENT_SECRET:dev-placeholder}
+
+logging:
+  level:
+    com.gitanalytics: DEBUG
+    org.springframework.web: INFO
+    org.springframework.security: INFO

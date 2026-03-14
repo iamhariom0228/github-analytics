@@ -1,6 +1,7 @@
 package com.gitanalytics.shared.config;
 
 import com.gitanalytics.shared.security.JwtAuthenticationFilter;
+import com.gitanalytics.shared.security.RateLimitFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,6 +24,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final RateLimitFilter rateLimitFilter;
     private final AppProperties appProperties;
 
     @Bean
@@ -35,10 +37,12 @@ public class SecurityConfig {
                 .requestMatchers("/auth/github", "/auth/github/callback").permitAll()
                 .requestMatchers("/webhooks/github").permitAll()
                 .requestMatchers("/actuator/health").permitAll()
+                .requestMatchers("/dev/**").permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .anyRequest().authenticated()
             )
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterAfter(rateLimitFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }
