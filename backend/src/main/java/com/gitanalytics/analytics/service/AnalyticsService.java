@@ -290,6 +290,41 @@ public class AnalyticsService {
         }
     }
 
+    // ---------- Reviews Summary ----------
+
+    public ReviewsSummaryDto getReviewsSummary(UUID userId, String login, OffsetDateTime from, OffsetDateTime to) {
+        String sql = """
+            SELECT
+              COUNT(*) AS total,
+              COUNT(*) FILTER (WHERE r.state = 'APPROVED') AS approved,
+              COUNT(*) FILTER (WHERE r.state = 'CHANGES_REQUESTED') AS changes_requested,
+              COUNT(*) FILTER (WHERE r.state = 'COMMENTED') AS commented,
+              COUNT(DISTINCT r.pr_id) AS prs_reviewed
+            FROM pr_reviews r
+            JOIN pull_requests pr ON r.pr_id = pr.id
+            JOIN tracked_repos tr ON pr.repo_id = tr.id
+            WHERE tr.user_id = :userId
+              AND r.reviewer_login = :login
+              AND r.submitted_at BETWEEN :from AND :to
+            """;
+
+        Object[] row = (Object[]) em.createNativeQuery(sql)
+            .setParameter("userId", userId)
+            .setParameter("login", login)
+            .setParameter("from", from)
+            .setParameter("to", to)
+            .getSingleResult();
+
+        long total = row[0] != null ? ((Number) row[0]).longValue() : 0;
+        long approved = row[1] != null ? ((Number) row[1]).longValue() : 0;
+        long changesRequested = row[2] != null ? ((Number) row[2]).longValue() : 0;
+        long commented = row[3] != null ? ((Number) row[3]).longValue() : 0;
+        long prsReviewed = row[4] != null ? ((Number) row[4]).longValue() : 0;
+        double avg = prsReviewed > 0 ? (double) total / prsReviewed : 0;
+
+        return new ReviewsSummaryDto(total, approved, changesRequested, commented, avg);
+    }
+
     // ---------- Stale PRs ----------
 
     public List<PrSummaryDto> getStalePRs(UUID userId, UUID repoId, int olderThanDays) {

@@ -58,6 +58,14 @@ export interface PRLifecycle {
   totalCount: number;
 }
 
+export interface ReviewsSummary {
+  totalReviewsGiven: number;
+  approved: number;
+  changesRequested: number;
+  commented: number;
+  avgReviewsPerPR: number;
+}
+
 export interface PRSizeDistribution {
   buckets: Record<string, number>;
 }

@@ -4,6 +4,7 @@ import {
   getHeatmap,
   getPRLifecycle,
   getPRSizeDistribution,
+  getReviewsSummary,
   getStreak,
   getLeaderboard,
   getBusFactor,
@@ -25,6 +26,13 @@ export function usePRLifecycle(from: string, to: string) {
   return useQuery({
     queryKey: ["pr-lifecycle", from, to],
     queryFn: () => getPRLifecycle(from, to),
+  });
+}
+
+export function useReviewsSummary(from: string, to: string) {
+  return useQuery({
+    queryKey: ["reviews-summary", from, to],
+    queryFn: () => getReviewsSummary(from, to),
   });
 }
 

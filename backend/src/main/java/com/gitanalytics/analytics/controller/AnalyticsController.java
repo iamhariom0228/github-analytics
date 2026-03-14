@@ -51,6 +51,17 @@ public class AnalyticsController {
         return ResponseEntity.ok(ApiResponse.ok(analyticsService.getPRSizeDistribution(userId, from, to)));
     }
 
+    @GetMapping("/reviews")
+    public ResponseEntity<ApiResponse<ReviewsSummaryDto>> getReviewsSummary(
+            @AuthenticationPrincipal UserDetails principal,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to) {
+        UUID userId = UUID.fromString(principal.getUsername());
+        String login = userRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found")).getUsername();
+        return ResponseEntity.ok(ApiResponse.ok(analyticsService.getReviewsSummary(userId, login, from, to)));
+    }
+
     @GetMapping("/streak")
     public ResponseEntity<ApiResponse<StreakDto>> getStreak(
             @AuthenticationPrincipal UserDetails principal,

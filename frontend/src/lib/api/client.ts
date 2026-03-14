@@ -33,6 +33,7 @@ import type {
   HeatmapCell,
   PRLifecycle,
   PRSizeDistribution,
+  ReviewsSummary,
   ContributorStats,
   BusFactor,
   Streak,
@@ -92,6 +93,11 @@ export const getPRSizeDistribution = (from: string, to: string) =>
     .get<ApiResponse<PRSizeDistribution>>("/analytics/prs/size-distribution", {
       params: { from, to },
     })
+    .then(unwrap);
+
+export const getReviewsSummary = (from: string, to: string) =>
+  apiClient
+    .get<ApiResponse<ReviewsSummary>>("/analytics/reviews", { params: { from, to } })
     .then(unwrap);
 
 export const getStreak = (timezone?: string) =>
