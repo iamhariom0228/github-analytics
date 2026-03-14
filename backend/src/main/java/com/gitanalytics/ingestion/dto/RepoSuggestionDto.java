@@ -5,5 +5,7 @@ public record RepoSuggestionDto(
     String name,
     String fullName,
     boolean privateRepo,
-    String owner
-) {}
+    Owner owner
+) {
+    public record Owner(String login) {}
+}

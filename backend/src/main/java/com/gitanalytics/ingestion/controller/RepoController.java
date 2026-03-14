@@ -74,7 +74,8 @@ public class RepoController {
                 String ownerLogin = r.getOwner() != null ? r.getOwner().getLogin() : null;
                 String fullName = r.getFullName() != null ? r.getFullName()
                     : (ownerLogin != null ? ownerLogin + "/" + r.getName() : r.getName());
-                return new RepoSuggestionDto(r.getId(), r.getName(), fullName, r.isPrivateRepo(), ownerLogin);
+                return new RepoSuggestionDto(r.getId(), r.getName(), fullName, r.isPrivateRepo(),
+                    ownerLogin != null ? new RepoSuggestionDto.Owner(ownerLogin) : null);
             })
             .toList();
         return ResponseEntity.ok(ApiResponse.ok(suggestions));
