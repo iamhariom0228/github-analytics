@@ -70,13 +70,12 @@ public class RepoController {
             @AuthenticationPrincipal UserDetails principal) {
         UUID userId = UUID.fromString(principal.getUsername());
         List<RepoSuggestionDto> suggestions = repoService.getSuggestions(userId).stream()
-            .map(r -> new RepoSuggestionDto(
-                r.getId(),
-                r.getName(),
-                r.getFullName(),
-                r.isPrivateRepo(),
-                r.getOwner() != null ? r.getOwner().getLogin() : null
-            ))
+            .map(r -> {
+                String ownerLogin = r.getOwner() != null ? r.getOwner().getLogin() : null;
+                String fullName = r.getFullName() != null ? r.getFullName()
+                    : (ownerLogin != null ? ownerLogin + "/" + r.getName() : r.getName());
+                return new RepoSuggestionDto(r.getId(), r.getName(), fullName, r.isPrivateRepo(), ownerLogin);
+            })
             .toList();
         return ResponseEntity.ok(ApiResponse.ok(suggestions));
     }
