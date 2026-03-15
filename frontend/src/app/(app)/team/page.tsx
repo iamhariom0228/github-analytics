@@ -25,9 +25,13 @@ function exportCSV(leaderboard: Array<{ login: string; commits: number; linesAdd
   URL.revokeObjectURL(url);
 }
 
+const STORAGE_KEY = "team:selectedRepoId";
+
 export default function TeamPage() {
   const { data: repos, isLoading: reposLoading } = useRepos();
-  const [selectedRepoId, setSelectedRepoId] = useState<string>("");
+  const [selectedRepoId, setSelectedRepoId] = useState<string>(
+    () => (typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) ?? "" : "")
+  );
   const [preset, setPreset] = useState<DatePreset>("30d");
   const { from, to } = usePresetDates(preset);
 
@@ -68,7 +72,10 @@ export default function TeamPage() {
           <DateRangePicker value={preset} onChange={(p) => setPreset(p)} />
           <select
             value={repoId}
-            onChange={(e) => setSelectedRepoId(e.target.value)}
+            onChange={(e) => {
+            setSelectedRepoId(e.target.value);
+            localStorage.setItem(STORAGE_KEY, e.target.value);
+          }}
             className="border border-input rounded-md px-3 py-1.5 text-sm bg-background"
           >
             {repos?.map((r) => (
