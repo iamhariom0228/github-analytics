@@ -16,6 +16,7 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import com.gitanalytics.shared.client.GroqApiClient;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
@@ -38,6 +39,7 @@ class AnalyticsServiceTest {
     @Mock private TrackedRepoRepository trackedRepoRepository;
     @Mock private RedisTemplate<String, Object> redisTemplate;
     @Mock private ValueOperations<String, Object> valueOps;
+    @Mock private GroqApiClient groqApiClient;
 
     private AnalyticsService service;
 
@@ -45,7 +47,7 @@ class AnalyticsServiceTest {
     void setUp() {
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
         service = new AnalyticsService(userRepository, commitRepository, pullRequestRepository,
-            prReviewRepository, trackedRepoRepository, redisTemplate);
+            prReviewRepository, trackedRepoRepository, redisTemplate, groqApiClient);
         // inject EntityManager via reflection (it's @PersistenceContext)
         try {
             var field = AnalyticsService.class.getDeclaredField("em");

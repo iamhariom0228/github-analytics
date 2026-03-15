@@ -8,6 +8,7 @@ import com.gitanalytics.ingestion.repository.CommitRepository;
 import com.gitanalytics.ingestion.repository.PullRequestRepository;
 import com.gitanalytics.ingestion.repository.PrReviewRepository;
 import com.gitanalytics.ingestion.repository.TrackedRepoRepository;
+import com.gitanalytics.shared.client.GroqApiClient;
 import com.gitanalytics.shared.exception.ResourceNotFoundException;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -35,6 +36,7 @@ public class AnalyticsService {
     private final PrReviewRepository prReviewRepository;
     private final TrackedRepoRepository trackedRepoRepository;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final GroqApiClient groqApiClient;
 
     // ---------- Dashboard ----------
 
@@ -529,6 +531,22 @@ public class AnalyticsService {
             }
         }
 
+        // AI-generated insight via Groq (no-op if key not set)
+        if (!insights.isEmpty()) {
+            try {
+                String summary = insights.stream()
+                    .map(InsightDto::message)
+                    .collect(java.util.stream.Collectors.joining("; "));
+                String aiText = groqApiClient.complete(
+                    "You are a developer productivity coach. Given metrics about a developer, write one encouraging, specific insight in 1-2 sentences. Be direct and concrete. No fluff.",
+                    "Developer stats: " + summary + ". Give one actionable insight."
+                );
+                if (aiText != null && !aiText.isBlank()) {
+                    insights.add(new InsightDto(aiText, "info", null, "AI Insight"));
+                }
+            } catch (Exception ignored) {}
+        }
+
         return insights;
     }
 
@@ -575,6 +593,186 @@ public class AnalyticsService {
             .map(pr -> new PrSummaryDto(pr.getId(), pr.getPrNumber(), pr.getTitle(),
                 pr.getState().name(), pr.getCreatedAt()))
             .toList();
+    }
+
+    // ---------- Repo Health Score ----------
+
+    public RepoHealthDto getRepoHealth(UUID userId, UUID repoId) {
+        var repo = trackedRepoRepository.findById(repoId)
+            .orElseThrow(() -> new ResourceNotFoundException("Repository not found"));
+
+        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime thirtyDaysAgo = now.minusDays(30);
+        OffsetDateTime fourteenDaysAgo = now.minusDays(14);
+
+        // Signal 1: commit activity last 30 days
+        long recentCommits = ((Number) em.createNativeQuery(
+                "SELECT COUNT(*) FROM commits WHERE repo_id = :repoId AND committed_at > :since")
+            .setParameter("repoId", repoId).setParameter("since", thirtyDaysAgo)
+            .getSingleResult()).longValue();
+        boolean hasActivity = recentCommits > 0;
+
+        // Signal 2: PR review coverage
+        Object[] reviewCoverage = (Object[]) em.createNativeQuery(
+                "SELECT COUNT(DISTINCT pr.id), COUNT(DISTINCT rv.pr_id) " +
+                "FROM pull_requests pr LEFT JOIN pr_reviews rv ON rv.pr_id = pr.id " +
+                "WHERE pr.repo_id = :repoId AND pr.created_at > :since")
+            .setParameter("repoId", repoId).setParameter("since", thirtyDaysAgo)
+            .getSingleResult();
+        long totalPRs30d = ((Number) reviewCoverage[0]).longValue();
+        long reviewedPRs = ((Number) reviewCoverage[1]).longValue();
+        boolean goodReviewCoverage = totalPRs30d == 0 || (reviewedPRs * 100 / totalPRs30d) >= 50;
+
+        // Signal 3: bus factor > 1
+        long distinctAuthors = ((Number) em.createNativeQuery(
+                "SELECT COUNT(DISTINCT author_login) FROM commits WHERE repo_id = :repoId AND committed_at > :since")
+            .setParameter("repoId", repoId).setParameter("since", thirtyDaysAgo)
+            .getSingleResult()).longValue();
+        boolean goodBusFactor = distinctAuthors > 1;
+
+        // Signal 4: avg PR merge time < 48h
+        Object avgMergeRaw = em.createNativeQuery(
+                "SELECT AVG(EXTRACT(EPOCH FROM (merged_at - created_at))/3600) " +
+                "FROM pull_requests WHERE repo_id = :repoId AND merged_at IS NOT NULL AND created_at > :since")
+            .setParameter("repoId", repoId).setParameter("since", thirtyDaysAgo)
+            .getSingleResult();
+        double avgMergeHours = avgMergeRaw != null ? ((Number) avgMergeRaw).doubleValue() : 0;
+        boolean fastMerge = avgMergeRaw == null || avgMergeHours < 48;
+
+        // Signal 5: no stale PRs older than 14 days
+        long stalePRs = ((Number) em.createNativeQuery(
+                "SELECT COUNT(*) FROM pull_requests WHERE repo_id = :repoId AND state = 'OPEN' AND created_at < :cutoff")
+            .setParameter("repoId", repoId).setParameter("cutoff", fourteenDaysAgo)
+            .getSingleResult()).longValue();
+        boolean noStalePRs = stalePRs == 0;
+
+        List<RepoHealthDto.SignalDto> signals = List.of(
+            new RepoHealthDto.SignalDto("Recent commits (30d)", hasActivity,
+                hasActivity ? recentCommits + " commits" : "No commits in 30 days"),
+            new RepoHealthDto.SignalDto("PR review coverage", goodReviewCoverage,
+                totalPRs30d == 0 ? "No PRs" : reviewedPRs + "/" + totalPRs30d + " PRs reviewed"),
+            new RepoHealthDto.SignalDto("Bus factor > 1", goodBusFactor,
+                distinctAuthors + " contributor" + (distinctAuthors != 1 ? "s" : "")),
+            new RepoHealthDto.SignalDto("Fast PR merge time", fastMerge,
+                avgMergeRaw == null ? "No merged PRs" : String.format("%.1fh avg", avgMergeHours)),
+            new RepoHealthDto.SignalDto("No stale PRs", noStalePRs,
+                stalePRs == 0 ? "All clear" : stalePRs + " stale PR" + (stalePRs != 1 ? "s" : ""))
+        );
+
+        int score = 0;
+        if (hasActivity) score += 20;
+        if (goodReviewCoverage) score += 20;
+        if (goodBusFactor) score += 20;
+        if (fastMerge) score += 20;
+        if (noStalePRs) score += 20;
+
+        String label = score >= 80 ? "Healthy" : score >= 60 ? "At Risk" : "Needs Attention";
+        return new RepoHealthDto(score, label, signals);
+    }
+
+    // ---------- Public Repo Stats (no auth needed for public repos) ----------
+
+    @SuppressWarnings("unchecked")
+    public PublicRepoStatsDto getPublicRepoStats(UUID userId, UUID repoId) {
+        var repo = trackedRepoRepository.findById(repoId)
+            .orElseThrow(() -> new ResourceNotFoundException("Repository not found"));
+
+        OffsetDateTime epoch = OffsetDateTime.parse("2000-01-01T00:00:00Z");
+        OffsetDateTime now = OffsetDateTime.now();
+
+        long totalCommits = ((Number) em.createNativeQuery(
+                "SELECT COUNT(*) FROM commits WHERE repo_id = :repoId")
+            .setParameter("repoId", repoId).getSingleResult()).longValue();
+
+        Object[] prStats = (Object[]) em.createNativeQuery(
+                "SELECT COUNT(*), COUNT(CASE WHEN merged_at IS NOT NULL THEN 1 END), " +
+                "AVG(CASE WHEN merged_at IS NOT NULL THEN EXTRACT(EPOCH FROM (merged_at - created_at))/3600 END) " +
+                "FROM pull_requests WHERE repo_id = :repoId")
+            .setParameter("repoId", repoId).getSingleResult();
+        long totalPRs = ((Number) prStats[0]).longValue();
+        long mergedPRs = ((Number) prStats[1]).longValue();
+        double avgMerge = prStats[2] != null ? ((Number) prStats[2]).doubleValue() : 0;
+
+        // Top contributor
+        List<Object[]> topRows = em.createNativeQuery(
+                "SELECT author_login, COUNT(*) cnt FROM commits WHERE repo_id = :repoId " +
+                "GROUP BY author_login ORDER BY cnt DESC LIMIT 1")
+            .setParameter("repoId", repoId).getResultList();
+        String topContributor = topRows.isEmpty() ? null : (String) topRows.get(0)[0];
+        long topCount = topRows.isEmpty() ? 0 : ((Number) topRows.get(0)[1]).longValue();
+        int topPct = totalCommits > 0 ? (int) (topCount * 100 / totalCommits) : 0;
+
+        RepoHealthDto health = getRepoHealth(userId, repoId);
+
+        return new PublicRepoStatsDto(
+            repo.getFullName(), null,
+            0, 0, 0,  // stars/forks/openIssues — filled from GitHub API on-demand or from language sync
+            null, Map.of(),
+            health.score(), health.label(),
+            totalCommits, totalPRs, mergedPRs, avgMerge,
+            topContributor, topPct, true
+        );
+    }
+
+    // ---------- Commit Trend ----------
+
+    @SuppressWarnings("unchecked")
+    public List<CommitTrendDto> getCommitTrend(UUID userId, String login, String granularity,
+                                                OffsetDateTime from, OffsetDateTime to) {
+        String truncFn = "week".equalsIgnoreCase(granularity) ? "week" : "day";
+        String sql = "SELECT DATE_TRUNC('" + truncFn + "', c.committed_at) AS period, COUNT(*) AS cnt " +
+                     "FROM commits c JOIN tracked_repos r ON c.repo_id = r.id " +
+                     "WHERE r.user_id = :userId AND c.author_login = :login " +
+                     "AND c.committed_at BETWEEN :from AND :to " +
+                     "GROUP BY period ORDER BY period ASC";
+        List<Object[]> rows = em.createNativeQuery(sql)
+            .setParameter("userId", userId)
+            .setParameter("login", login)
+            .setParameter("from", from)
+            .setParameter("to", to)
+            .getResultList();
+        return rows.stream()
+            .map(r -> new CommitTrendDto(
+                ((java.sql.Timestamp) r[0]).toInstant().atOffset(ZoneOffset.UTC).toLocalDate().toString(),
+                ((Number) r[1]).longValue()
+            ))
+            .toList();
+    }
+
+    // ---------- Overview ----------
+
+    public OverviewDto getOverview(UUID userId, String login, OffsetDateTime from, OffsetDateTime to) {
+        long commits = countCommits(userId, login, from, to);
+
+        String prSql = "SELECT COUNT(*) FROM pull_requests pr JOIN tracked_repos r ON pr.repo_id = r.id " +
+                       "WHERE r.user_id = :userId AND pr.author_login = :login AND pr.created_at BETWEEN :from AND :to";
+        long prsAuthored = ((Number) em.createNativeQuery(prSql)
+            .setParameter("userId", userId).setParameter("login", login)
+            .setParameter("from", from).setParameter("to", to)
+            .getSingleResult()).longValue();
+
+        String reviewSql = "SELECT COUNT(*) FROM pr_reviews rv " +
+                           "JOIN pull_requests pr ON rv.pr_id = pr.id " +
+                           "JOIN tracked_repos r ON pr.repo_id = r.id " +
+                           "WHERE r.user_id = :userId AND rv.reviewer_login = :login " +
+                           "AND rv.submitted_at BETWEEN :from AND :to";
+        long reviewsGiven = ((Number) em.createNativeQuery(reviewSql)
+            .setParameter("userId", userId).setParameter("login", login)
+            .setParameter("from", from).setParameter("to", to)
+            .getSingleResult()).longValue();
+
+        String addSql = "SELECT COALESCE(SUM(c.additions), 0), COALESCE(SUM(c.deletions), 0) " +
+                        "FROM commits c JOIN tracked_repos r ON c.repo_id = r.id " +
+                        "WHERE r.user_id = :userId AND c.author_login = :login " +
+                        "AND c.committed_at BETWEEN :from AND :to";
+        Object[] addRow = (Object[]) em.createNativeQuery(addSql)
+            .setParameter("userId", userId).setParameter("login", login)
+            .setParameter("from", from).setParameter("to", to)
+            .getSingleResult();
+        long linesAdded = ((Number) addRow[0]).longValue();
+        long linesRemoved = ((Number) addRow[1]).longValue();
+
+        return new OverviewDto(commits, prsAuthored, reviewsGiven, linesAdded, linesRemoved);
     }
 
     // ---------- Private Helpers ----------

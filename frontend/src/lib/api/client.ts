@@ -41,6 +41,9 @@ import type {
   GitHubRepoSuggestion,
   PrSummary,
   Insight,
+  CommitTrendPoint,
+  Overview,
+  RepoHealth,
 } from "@/types";
 import type { ApiResponse } from "@/types";
 
@@ -128,6 +131,23 @@ export const getStalePRs = (repoId: string, olderThanDays = 7) =>
 export const getInsights = (timezone?: string) =>
   apiClient
     .get<ApiResponse<Insight[]>>("/analytics/insights", { params: { timezone } })
+    .then(unwrap);
+
+export const getCommitTrend = (from: string, to: string, granularity = "daily") =>
+  apiClient
+    .get<ApiResponse<CommitTrendPoint[]>>("/analytics/commits/trend", {
+      params: { from, to, granularity },
+    })
+    .then(unwrap);
+
+export const getOverview = (from: string, to: string) =>
+  apiClient
+    .get<ApiResponse<Overview>>("/analytics/overview", { params: { from, to } })
+    .then(unwrap);
+
+export const getRepoHealth = (repoId: string) =>
+  apiClient
+    .get<ApiResponse<RepoHealth>>(`/analytics/repos/${repoId}/health`)
     .then(unwrap);
 
 // Digest

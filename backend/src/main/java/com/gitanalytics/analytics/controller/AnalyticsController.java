@@ -99,6 +99,45 @@ public class AnalyticsController {
         return ResponseEntity.ok(ApiResponse.ok(analyticsService.getStalePRs(userId, repoId, olderThanDays)));
     }
 
+    @GetMapping("/repos/{repoId}/health")
+    public ResponseEntity<ApiResponse<RepoHealthDto>> getRepoHealth(
+            @AuthenticationPrincipal UserDetails principal,
+            @PathVariable UUID repoId) {
+        UUID userId = UUID.fromString(principal.getUsername());
+        return ResponseEntity.ok(ApiResponse.ok(analyticsService.getRepoHealth(userId, repoId)));
+    }
+
+    @GetMapping("/repos/{repoId}/stats")
+    public ResponseEntity<ApiResponse<PublicRepoStatsDto>> getRepoStats(
+            @AuthenticationPrincipal UserDetails principal,
+            @PathVariable UUID repoId) {
+        UUID userId = UUID.fromString(principal.getUsername());
+        return ResponseEntity.ok(ApiResponse.ok(analyticsService.getPublicRepoStats(userId, repoId)));
+    }
+
+    @GetMapping("/commits/trend")
+    public ResponseEntity<ApiResponse<List<CommitTrendDto>>> getCommitTrend(
+            @AuthenticationPrincipal UserDetails principal,
+            @RequestParam(defaultValue = "daily") String granularity,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to) {
+        UUID userId = UUID.fromString(principal.getUsername());
+        String login = userRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found")).getUsername();
+        return ResponseEntity.ok(ApiResponse.ok(analyticsService.getCommitTrend(userId, login, granularity, from, to)));
+    }
+
+    @GetMapping("/overview")
+    public ResponseEntity<ApiResponse<OverviewDto>> getOverview(
+            @AuthenticationPrincipal UserDetails principal,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to) {
+        UUID userId = UUID.fromString(principal.getUsername());
+        String login = userRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found")).getUsername();
+        return ResponseEntity.ok(ApiResponse.ok(analyticsService.getOverview(userId, login, from, to)));
+    }
+
     @GetMapping("/insights")
     public ResponseEntity<ApiResponse<List<InsightDto>>> getInsights(
             @AuthenticationPrincipal UserDetails principal,

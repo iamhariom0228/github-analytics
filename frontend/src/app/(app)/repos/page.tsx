@@ -2,16 +2,69 @@
 
 import { useState } from "react";
 import { useRepos, useAddRepo, useDeleteRepo, useTriggerSync, useRepoSuggestions } from "@/hooks/useRepos";
+import { useRepoHealth } from "@/hooks/useAnalytics";
 import { cn } from "@/lib/utils";
-import { RefreshCw, Trash2, Plus, Search } from "lucide-react";
-import type { GitHubRepoSuggestion } from "@/types";
+import { RefreshCw, Trash2, Plus, Search, ShieldCheck, ShieldAlert, ShieldX, ChevronDown, ChevronUp } from "lucide-react";
+import type { GitHubRepoSuggestion, RepoHealth } from "@/types";
 
 const statusColor: Record<string, string> = {
-  PENDING: "text-yellow-600 bg-yellow-50",
-  SYNCING: "text-blue-600 bg-blue-50",
-  DONE: "text-green-600 bg-green-50",
-  FAILED: "text-red-600 bg-red-50",
+  PENDING: "text-yellow-600 bg-yellow-50 dark:bg-yellow-950/30",
+  SYNCING: "text-blue-600 bg-blue-50 dark:bg-blue-950/30",
+  DONE: "text-green-600 bg-green-50 dark:bg-green-950/30",
+  FAILED: "text-red-600 bg-red-50 dark:bg-red-950/30",
 };
+
+const healthConfig = {
+  "Healthy": { icon: ShieldCheck, color: "text-green-500", bg: "bg-green-500/10" },
+  "At Risk": { icon: ShieldAlert, color: "text-yellow-500", bg: "bg-yellow-500/10" },
+  "Needs Attention": { icon: ShieldX, color: "text-red-500", bg: "bg-red-500/10" },
+};
+
+function HealthBadge({ repoId, syncStatus }: { repoId: string; syncStatus: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const { data: health, isLoading } = useRepoHealth(repoId);
+
+  if (syncStatus !== "DONE" || isLoading) return null;
+  if (!health) return null;
+
+  const cfg = healthConfig[health.label] ?? healthConfig["Needs Attention"];
+  const Icon = cfg.icon;
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setExpanded((e) => !e)}
+        className={cn("flex items-center gap-1.5 text-xs px-2 py-0.5 rounded font-medium border", cfg.bg, cfg.color, "border-current/20")}
+      >
+        <Icon className="w-3 h-3" />
+        {health.score}/100
+        {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+      </button>
+
+      {expanded && (
+        <div className="absolute top-7 left-0 z-10 w-72 bg-card border border-border rounded-xl shadow-xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="font-semibold text-sm">{health.label}</div>
+            <div className={cn("text-lg font-bold", cfg.color)}>{health.score}/100</div>
+          </div>
+          <div className="space-y-2">
+            {health.signals.map((s) => (
+              <div key={s.name} className="flex items-start gap-2 text-xs">
+                <span className={s.passed ? "text-green-500 mt-0.5" : "text-red-400 mt-0.5"}>
+                  {s.passed ? "✓" : "✗"}
+                </span>
+                <div>
+                  <div className={s.passed ? "text-foreground" : "text-muted-foreground"}>{s.name}</div>
+                  <div className="text-muted-foreground">{s.detail}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ReposPage() {
   const { data: repos, isLoading, error } = useRepos();
@@ -53,47 +106,48 @@ export default function ReposPage() {
       ) : isLoading ? (
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-16 bg-muted animate-pulse rounded-xl" />
+            <div key={i} className="h-20 bg-muted animate-pulse rounded-xl" />
           ))}
         </div>
       ) : repos?.length === 0 ? (
-        <div className="text-center py-16 text-muted-foreground">
-          No repositories tracked yet. Add one to get started.
+        <div className="text-center py-16 border border-dashed border-border rounded-xl text-muted-foreground">
+          <Plus className="w-8 h-8 mx-auto mb-3 opacity-40" />
+          <p className="font-medium">No repositories tracked yet</p>
+          <p className="text-sm mt-1">Add a repository to start seeing analytics</p>
         </div>
       ) : (
         <div className="space-y-3">
           {repos?.map((repo) => (
-            <div key={repo.id} className="bg-card border border-border rounded-xl p-4 flex items-center justify-between">
-              <div>
-                <div className="font-medium">{repo.fullName}</div>
-                <div className="flex items-center gap-2 mt-1">
+            <div key={repo.id} className="bg-card border border-border rounded-xl p-4 flex items-center justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <div className="font-medium truncate">{repo.fullName}</div>
+                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                   <span className={cn("text-xs px-2 py-0.5 rounded font-medium", statusColor[repo.syncStatus])}>
                     {repo.syncStatus}
                   </span>
                   {repo.isPrivate && (
-                    <span className="text-xs text-muted-foreground border border-border rounded px-2 py-0.5">
-                      Private
-                    </span>
+                    <span className="text-xs text-muted-foreground border border-border rounded px-2 py-0.5">Private</span>
                   )}
                   {repo.lastSyncedAt && (
                     <span className="text-xs text-muted-foreground">
                       Synced {new Date(repo.lastSyncedAt).toLocaleDateString()}
                     </span>
                   )}
+                  <HealthBadge repoId={repo.id} syncStatus={repo.syncStatus} />
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <button
                   onClick={() => triggerSync.mutate(repo.id)}
                   disabled={repo.syncStatus === "SYNCING"}
-                  className="p-2 hover:bg-muted rounded-md disabled:opacity-50"
+                  className="p-2 hover:bg-muted rounded-md disabled:opacity-50 transition-colors"
                   title="Sync now"
                 >
                   <RefreshCw className={cn("w-4 h-4", repo.syncStatus === "SYNCING" && "animate-spin")} />
                 </button>
                 <button
                   onClick={() => deleteRepo.mutate(repo.id)}
-                  className="p-2 hover:bg-red-50 text-red-500 rounded-md"
+                  className="p-2 hover:bg-red-50 dark:hover:bg-red-950/30 text-red-500 rounded-md transition-colors"
                   title="Remove"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -104,7 +158,6 @@ export default function ReposPage() {
         </div>
       )}
 
-      {/* Add Repo Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-card border border-border rounded-xl p-6 w-full max-w-md shadow-xl">
@@ -115,7 +168,7 @@ export default function ReposPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search your repositories..."
-                className="w-full pl-9 pr-3 py-2 border border-input rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                className="w-full pl-9 pr-3 py-2 border border-input rounded-md text-sm bg-background focus:outline-none focus:ring-1 focus:ring-ring"
               />
             </div>
             <div className="space-y-2 max-h-64 overflow-y-auto">
@@ -124,7 +177,7 @@ export default function ReposPage() {
                   key={repo.id}
                   onClick={() => handleAdd(repo)}
                   disabled={addRepo.isPending}
-                  className="w-full text-left px-3 py-2 hover:bg-muted rounded-md text-sm"
+                  className="w-full text-left px-3 py-2 hover:bg-muted rounded-md text-sm transition-colors"
                 >
                   <div className="font-medium">{repo.fullName}</div>
                   {repo.privateRepo && <div className="text-xs text-muted-foreground">Private</div>}
@@ -135,10 +188,7 @@ export default function ReposPage() {
               )}
             </div>
             <div className="flex justify-end mt-4">
-              <button
-                onClick={() => setShowModal(false)}
-                className="text-sm text-muted-foreground hover:text-foreground"
-              >
+              <button onClick={() => setShowModal(false)} className="text-sm text-muted-foreground hover:text-foreground">
                 Cancel
               </button>
             </div>

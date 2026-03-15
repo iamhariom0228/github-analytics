@@ -71,6 +71,9 @@ app:
     webhook-secret: ${GITHUB_WEBHOOK_SECRET:}
     webhook-url: ${GITHUB_WEBHOOK_URL:}
 
+  groq:
+    api-key: ${GROQ_API_KEY:}
+
   encryption:
     key: ${ENCRYPTION_KEY:changeme-32-byte-key-for-aes-gcm!}
 

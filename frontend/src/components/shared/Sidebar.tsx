@@ -10,8 +10,11 @@ import {
   Users,
   Settings,
   LogOut,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTheme } from "next-themes";
 import { logout } from "@/lib/api/client";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -27,6 +30,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const qc = useQueryClient();
   const { data: user } = useAuth();
+  const { theme, setTheme } = useTheme();
 
   const logoutMutation = useMutation({
     mutationFn: logout,
@@ -39,8 +43,15 @@ export function Sidebar() {
   return (
     <aside className="w-64 border-r border-border bg-card flex flex-col h-screen sticky top-0">
       {/* Brand */}
-      <div className="p-6 border-b border-border">
+      <div className="p-6 border-b border-border flex items-center justify-between">
         <span className="font-bold text-lg">GitHub Analytics</span>
+        <button
+          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          className="p-1.5 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+          aria-label="Toggle theme"
+        >
+          {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+        </button>
       </div>
 
       {/* User */}

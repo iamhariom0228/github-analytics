@@ -10,6 +10,9 @@ import {
   getBusFactor,
   getStalePRs,
   getInsights,
+  getCommitTrend,
+  getOverview,
+  getRepoHealth,
 } from "@/lib/api/client";
 
 export function useDashboard() {
@@ -79,5 +82,27 @@ export function useInsights(timezone?: string) {
   return useQuery({
     queryKey: ["insights", timezone],
     queryFn: () => getInsights(timezone),
+  });
+}
+
+export function useCommitTrend(from: string, to: string, granularity = "daily") {
+  return useQuery({
+    queryKey: ["commit-trend", from, to, granularity],
+    queryFn: () => getCommitTrend(from, to, granularity),
+  });
+}
+
+export function useOverview(from: string, to: string) {
+  return useQuery({
+    queryKey: ["overview", from, to],
+    queryFn: () => getOverview(from, to),
+  });
+}
+
+export function useRepoHealth(repoId: string) {
+  return useQuery({
+    queryKey: ["repo-health", repoId],
+    queryFn: () => getRepoHealth(repoId),
+    enabled: !!repoId,
   });
 }

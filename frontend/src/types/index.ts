@@ -109,3 +109,22 @@ export interface GitHubRepoSuggestion {
   privateRepo: boolean;
   owner: { login: string };
 }
+
+export interface CommitTrendPoint {
+  date: string;
+  count: number;
+}
+
+export interface Overview {
+  commits: number;
+  prsAuthored: number;
+  reviewsGiven: number;
+  linesAdded: number;
+  linesRemoved: number;
+}
+
+export interface RepoHealth {
+  score: number;
+  label: "Healthy" | "At Risk" | "Needs Attention";
+  signals: Array<{ name: string; passed: boolean; detail: string }>;
+}
