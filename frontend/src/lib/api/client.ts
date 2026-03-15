@@ -44,6 +44,7 @@ import type {
   CommitTrendPoint,
   Overview,
   RepoHealth,
+  AiSummary,
 } from "@/types";
 import type { ApiResponse } from "@/types";
 
@@ -148,6 +149,11 @@ export const getOverview = (from: string, to: string) =>
 export const getRepoHealth = (repoId: string) =>
   apiClient
     .get<ApiResponse<RepoHealth>>(`/analytics/repos/${repoId}/health`)
+    .then(unwrap);
+
+export const getAiSummary = (timezone?: string) =>
+  apiClient
+    .get<ApiResponse<AiSummary>>("/analytics/ai-summary", { params: { timezone } })
     .then(unwrap);
 
 // Digest

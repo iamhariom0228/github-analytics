@@ -775,6 +775,46 @@ public class AnalyticsService {
         return new OverviewDto(commits, prsAuthored, reviewsGiven, linesAdded, linesRemoved);
     }
 
+    // ---------- AI Summary ----------
+
+    public record AiSummaryDto(String summary, boolean aiPowered) {}
+
+    public AiSummaryDto getAiSummary(UUID userId, String login, String timezone) {
+        if (!groqApiClient.isConfigured()) {
+            return new AiSummaryDto("Connect Groq API to generate AI-powered summaries.", false);
+        }
+
+        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime thirtyDaysAgo = now.minusDays(30);
+
+        long commits30d = countCommits(userId, login, thirtyDaysAgo, now);
+        StreakDto streak = getStreak(userId, login, timezone);
+        PRLifecycleDto lifecycle = getPRLifecycle(userId, thirtyDaysAgo, now);
+
+        long stale = ((Number) em.createNativeQuery(
+                "SELECT COUNT(*) FROM pull_requests pr JOIN tracked_repos r ON pr.repo_id = r.id " +
+                "WHERE r.user_id = :userId AND pr.state = 'OPEN' AND pr.created_at < NOW() - INTERVAL '7 days'")
+            .setParameter("userId", userId).getSingleResult()).longValue();
+
+        String prompt = String.format(
+            "Developer '%s' stats (last 30 days): %d commits, %d PRs merged, avg merge time %.0f hours, " +
+            "%d day streak, %d stale PRs open. " +
+            "Write a 2-3 sentence coaching summary: highlight what's going well, flag one concern if any, give one actionable tip. " +
+            "Be specific, concise, and encouraging. No bullet points. Plain text only.",
+            login, commits30d, lifecycle.getMergedCount(), lifecycle.getAvgHoursToMerge(),
+            streak.getCurrentStreak(), stale
+        );
+
+        String summary = groqApiClient.complete(
+            "You are a senior engineering coach analyzing developer productivity metrics. Be direct and human.",
+            prompt
+        );
+
+        return summary != null
+            ? new AiSummaryDto(summary, true)
+            : new AiSummaryDto("Could not generate summary at this time.", false);
+    }
+
     // ---------- Private Helpers ----------
 
     private long countCommits(UUID userId, String login, OffsetDateTime from, OffsetDateTime to) {

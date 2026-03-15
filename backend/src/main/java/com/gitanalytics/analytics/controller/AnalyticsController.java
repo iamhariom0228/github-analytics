@@ -99,6 +99,16 @@ public class AnalyticsController {
         return ResponseEntity.ok(ApiResponse.ok(analyticsService.getStalePRs(userId, repoId, olderThanDays)));
     }
 
+    @GetMapping("/ai-summary")
+    public ResponseEntity<ApiResponse<AnalyticsService.AiSummaryDto>> getAiSummary(
+            @AuthenticationPrincipal UserDetails principal,
+            @RequestParam(defaultValue = "UTC") String timezone) {
+        UUID userId = UUID.fromString(principal.getUsername());
+        String login = userRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found")).getUsername();
+        return ResponseEntity.ok(ApiResponse.ok(analyticsService.getAiSummary(userId, login, timezone)));
+    }
+
     @GetMapping("/repos/{repoId}/health")
     public ResponseEntity<ApiResponse<RepoHealthDto>> getRepoHealth(
             @AuthenticationPrincipal UserDetails principal,

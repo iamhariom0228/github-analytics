@@ -60,6 +60,23 @@ function InsightCard({ insight }: InsightCardProps) {
     );
   }
 
+  // AI insight — special treatment
+  if (insight.metricLabel === "AI Insight") {
+    return (
+      <div className="rounded-xl border border-violet-500/30 bg-gradient-to-br from-violet-500/10 to-purple-500/5 p-4 flex gap-3 items-start sm:col-span-2">
+        <div className="flex-shrink-0 w-7 h-7 rounded-lg bg-violet-500/15 flex items-center justify-center mt-0.5">
+          <span className="text-sm">✦</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs font-semibold text-violet-500 uppercase tracking-wide">AI Coaching Insight</span>
+          </div>
+          <p className="text-sm leading-relaxed text-foreground">{insight.message}</p>
+        </div>
+      </div>
+    );
+  }
+
   // Text-only card (fallback)
   return (
     <div className={`rounded-xl border bg-gradient-to-br ${c.gradient} ${c.border} p-4 flex gap-3 items-start`}>

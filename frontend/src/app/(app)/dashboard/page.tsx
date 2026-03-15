@@ -1,6 +1,6 @@
 "use client";
 
-import { useDashboard, useInsights } from "@/hooks/useAnalytics";
+import { useDashboard, useInsights, useAiSummary } from "@/hooks/useAnalytics";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { RecentPRsTable } from "@/components/dashboard/RecentPRsTable";
 import { InsightsPanel } from "@/components/dashboard/InsightsPanel";
@@ -13,6 +13,7 @@ function Skeleton({ className = "" }: { className?: string }) {
 export default function DashboardPage() {
   const { data, isLoading, error } = useDashboard();
   const { data: insights, isLoading: insightsLoading } = useInsights();
+  const { data: aiSummary, isLoading: aiLoading } = useAiSummary();
 
   return (
     <div className="space-y-8">
@@ -42,6 +43,24 @@ export default function DashboardPage() {
               </>
             )}
           </div>
+
+          {/* AI Summary card */}
+          {aiLoading ? (
+            <div className="rounded-xl border border-violet-500/20 p-5">
+              <Skeleton className="h-4 w-32 mb-3" />
+              <Skeleton className="h-4 w-full mb-2" />
+              <Skeleton className="h-4 w-3/4" />
+            </div>
+          ) : aiSummary?.aiPowered ? (
+            <div className="rounded-xl border border-violet-500/30 bg-gradient-to-br from-violet-500/10 to-purple-500/5 p-5">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-violet-500 text-base">✦</span>
+                <span className="text-xs font-semibold text-violet-500 uppercase tracking-wider">AI Coaching Summary</span>
+                <span className="text-xs text-muted-foreground ml-auto">Powered by Groq · Llama 3</span>
+              </div>
+              <p className="text-sm leading-relaxed text-foreground">{aiSummary.summary}</p>
+            </div>
+          ) : null}
 
           {/* Insights */}
           {insightsLoading ? (

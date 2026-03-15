@@ -128,3 +128,8 @@ export interface RepoHealth {
   label: "Healthy" | "At Risk" | "Needs Attention";
   signals: Array<{ name: string; passed: boolean; detail: string }>;
 }
+
+export interface AiSummary {
+  summary: string;
+  aiPowered: boolean;
+}

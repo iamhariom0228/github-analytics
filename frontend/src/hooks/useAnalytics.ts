@@ -13,6 +13,7 @@ import {
   getCommitTrend,
   getOverview,
   getRepoHealth,
+  getAiSummary,
 } from "@/lib/api/client";
 
 export function useDashboard() {
@@ -104,5 +105,13 @@ export function useRepoHealth(repoId: string) {
     queryKey: ["repo-health", repoId],
     queryFn: () => getRepoHealth(repoId),
     enabled: !!repoId,
+  });
+}
+
+export function useAiSummary(timezone?: string) {
+  return useQuery({
+    queryKey: ["ai-summary", timezone],
+    queryFn: () => getAiSummary(timezone),
+    staleTime: 6 * 60 * 60 * 1000, // 6 hours — matches Redis cache TTL
   });
 }
