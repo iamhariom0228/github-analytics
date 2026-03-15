@@ -627,25 +627,19 @@ public class AnalyticsService {
 
         List<RepoHealthDto.SignalDto> signals = new ArrayList<>();
         int passed = 0;
-        int applicable = 0;
 
-        // Signal 1: commit velocity — meaningful if any commits exist all-time
+        // Signal 1: commit velocity — always scored, no commits = inactive
         long recentCommits = ((Number) em.createNativeQuery(
                 "SELECT COUNT(*) FROM commits WHERE repo_id = :repoId AND committed_at > :since")
             .setParameter("repoId", repoId).setParameter("since", thirtyDaysAgo)
             .getSingleResult()).longValue();
-        long totalCommits = ((Number) em.createNativeQuery(
-                "SELECT COUNT(*) FROM commits WHERE repo_id = :repoId")
-            .setParameter("repoId", repoId).getSingleResult()).longValue();
-        if (totalCommits > 0) {
-            boolean active = recentCommits >= 5;
-            applicable++;
-            if (active) passed++;
-            signals.add(new RepoHealthDto.SignalDto("Commit velocity (30d)", active,
-                active ? recentCommits + " commits" : recentCommits + " commits — below threshold of 5"));
-        }
+        boolean active = recentCommits >= 5;
+        if (active) passed++;
+        signals.add(new RepoHealthDto.SignalDto("Commit velocity (30d)", active,
+            recentCommits == 0 ? "No commits in 30 days" :
+            active ? recentCommits + " commits" : recentCommits + " commits — needs 5+"));
 
-        // Signal 2: PR review coverage — only scored if PRs exist
+        // Signal 2: PR review coverage — no PRs = fail (no review culture)
         Object[] reviewCoverage = (Object[]) em.createNativeQuery(
                 "SELECT COUNT(DISTINCT pr.id), COUNT(DISTINCT rv.pr_id) " +
                 "FROM pull_requests pr LEFT JOIN pr_reviews rv ON rv.pr_id = pr.id " +
@@ -654,15 +648,13 @@ public class AnalyticsService {
             .getSingleResult();
         long totalPRs30d = ((Number) reviewCoverage[0]).longValue();
         long reviewedPRs = ((Number) reviewCoverage[1]).longValue();
-        if (totalPRs30d > 0) {
-            boolean goodCoverage = (reviewedPRs * 100 / totalPRs30d) >= 50;
-            applicable++;
-            if (goodCoverage) passed++;
-            signals.add(new RepoHealthDto.SignalDto("PR review coverage", goodCoverage,
-                reviewedPRs + "/" + totalPRs30d + " PRs reviewed"));
-        }
+        boolean goodCoverage = totalPRs30d > 0 && (reviewedPRs * 100 / totalPRs30d) >= 50;
+        if (goodCoverage) passed++;
+        signals.add(new RepoHealthDto.SignalDto("PR review coverage", goodCoverage,
+            totalPRs30d == 0 ? "No PRs opened in 30 days" :
+            reviewedPRs + "/" + totalPRs30d + " PRs reviewed"));
 
-        // Signal 3: bus factor — top contributor owns < 70% of recent commits
+        // Signal 3: bus factor — top contributor owns < 70%; no commits = fail
         if (recentCommits > 0) {
             List<Object[]> topAuthors = (List<Object[]>) em.createNativeQuery(
                     "SELECT COALESCE(author_login, 'unknown'), COUNT(*) AS cnt FROM commits " +
@@ -671,50 +663,44 @@ public class AnalyticsService {
                 .setParameter("repoId", repoId).setParameter("since", thirtyDaysAgo)
                 .getResultList();
             if (!topAuthors.isEmpty()) {
-                Object[] topAuthor = topAuthors.get(0);
-                long topCount = ((Number) topAuthor[1]).longValue();
+                Object[] top = topAuthors.get(0);
+                long topCount = ((Number) top[1]).longValue();
                 int topPct = (int) Math.round((double) topCount / recentCommits * 100);
                 boolean goodBusFactor = topPct < 70;
-                applicable++;
                 if (goodBusFactor) passed++;
                 signals.add(new RepoHealthDto.SignalDto("Bus factor", goodBusFactor,
-                    topAuthor[0] + " owns " + topPct + "% of commits"));
+                    top[0] + " owns " + topPct + "% of commits"));
+            } else {
+                signals.add(new RepoHealthDto.SignalDto("Bus factor", false, "Unresolved commit authors"));
             }
+        } else {
+            signals.add(new RepoHealthDto.SignalDto("Bus factor", false, "No recent commits to evaluate"));
         }
 
-        // Signal 4: avg PR merge time < 48h — only scored if merged PRs exist
+        // Signal 4: avg PR merge time — no merged PRs = pass (can't penalise absent data)
         Object avgMergeRaw = em.createNativeQuery(
                 "SELECT AVG(EXTRACT(EPOCH FROM (merged_at - created_at))/3600) " +
                 "FROM pull_requests WHERE repo_id = :repoId AND merged_at IS NOT NULL AND created_at > :since")
             .setParameter("repoId", repoId).setParameter("since", thirtyDaysAgo)
             .getSingleResult();
-        if (avgMergeRaw != null) {
-            double avgMergeHours = ((Number) avgMergeRaw).doubleValue();
-            boolean fastMerge = avgMergeHours < 48;
-            applicable++;
-            if (fastMerge) passed++;
-            signals.add(new RepoHealthDto.SignalDto("PR merge time", fastMerge,
-                String.format("%.1fh avg", avgMergeHours)));
-        }
+        boolean fastMerge = avgMergeRaw == null || ((Number) avgMergeRaw).doubleValue() < 48;
+        if (fastMerge) passed++;
+        signals.add(new RepoHealthDto.SignalDto("PR merge time", fastMerge,
+            avgMergeRaw == null ? "No merged PRs" :
+            String.format("%.1fh avg", ((Number) avgMergeRaw).doubleValue())));
 
-        // Signal 5: no stale PRs — only scored if any PRs have been opened
-        long anyPRs = ((Number) em.createNativeQuery(
-                "SELECT COUNT(*) FROM pull_requests WHERE repo_id = :repoId")
-            .setParameter("repoId", repoId).getSingleResult()).longValue();
-        if (anyPRs > 0) {
-            long stalePRs = ((Number) em.createNativeQuery(
-                    "SELECT COUNT(*) FROM pull_requests WHERE repo_id = :repoId AND state = 'OPEN' AND created_at < :cutoff")
-                .setParameter("repoId", repoId).setParameter("cutoff", fourteenDaysAgo)
-                .getSingleResult()).longValue();
-            boolean noStale = stalePRs == 0;
-            applicable++;
-            if (noStale) passed++;
-            signals.add(new RepoHealthDto.SignalDto("No stale PRs (>14d)", noStale,
-                noStale ? "All clear" : stalePRs + " stale PR" + (stalePRs != 1 ? "s" : "")));
-        }
+        // Signal 5: no stale PRs — no open PRs = pass
+        long stalePRs = ((Number) em.createNativeQuery(
+                "SELECT COUNT(*) FROM pull_requests WHERE repo_id = :repoId AND state = 'OPEN' AND created_at < :cutoff")
+            .setParameter("repoId", repoId).setParameter("cutoff", fourteenDaysAgo)
+            .getSingleResult()).longValue();
+        boolean noStale = stalePRs == 0;
+        if (noStale) passed++;
+        signals.add(new RepoHealthDto.SignalDto("No stale PRs (>14d)", noStale,
+            noStale ? "All clear" : stalePRs + " stale PR" + (stalePRs != 1 ? "s" : "")));
 
-        // Score = passed / applicable signals * 100 (not always out of 5)
-        int score = applicable == 0 ? 0 : (int) Math.round((double) passed / applicable * 100);
+        // Score always out of 5
+        int score = passed * 20;
         String label = score >= 80 ? "Healthy" : score >= 60 ? "At Risk" : "Needs Attention";
         return new RepoHealthDto(score, label, signals);
     }
