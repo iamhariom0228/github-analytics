@@ -95,6 +95,13 @@ export interface DigestPreferences {
   timezone: string;
 }
 
+export interface Insight {
+  message: string;
+  type: "positive" | "warning" | "info";
+  metric?: string;
+  metricLabel?: string;
+}
+
 export interface GitHubRepoSuggestion {
   id: number;
   name: string;

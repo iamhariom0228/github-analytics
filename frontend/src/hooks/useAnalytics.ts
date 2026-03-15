@@ -9,6 +9,7 @@ import {
   getLeaderboard,
   getBusFactor,
   getStalePRs,
+  getInsights,
 } from "@/lib/api/client";
 
 export function useDashboard() {
@@ -71,5 +72,12 @@ export function useStalePRs(repoId: string, days = 7) {
     queryKey: ["stale-prs", repoId, days],
     queryFn: () => getStalePRs(repoId, days),
     enabled: !!repoId,
+  });
+}
+
+export function useInsights(timezone?: string) {
+  return useQuery({
+    queryKey: ["insights", timezone],
+    queryFn: () => getInsights(timezone),
   });
 }

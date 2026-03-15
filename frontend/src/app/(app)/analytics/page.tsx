@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useHeatmap, usePRLifecycle, usePRSizeDistribution, useReviewsSummary } from "@/hooks/useAnalytics";
 import { ContributionHeatmap } from "@/components/charts/ContributionHeatmap";
+import { DateRangePicker, usePresetDates } from "@/components/shared/DateRangePicker";
+import type { DatePreset } from "@/components/shared/DateRangePicker";
 import { formatHours } from "@/lib/utils";
 import {
   BarChart,
@@ -14,15 +16,14 @@ import {
   Cell,
 } from "recharts";
 import { PR_SIZE_COLORS } from "@/lib/utils";
-import { subDays, formatISO } from "date-fns";
 
 const tabs = ["Commits", "Pull Requests", "Reviews"] as const;
 type Tab = (typeof tabs)[number];
 
 export default function AnalyticsPage() {
   const [tab, setTab] = useState<Tab>("Commits");
-  const from = formatISO(subDays(new Date(), 30));
-  const to = formatISO(new Date());
+  const [preset, setPreset] = useState<DatePreset>("30d");
+  const { from, to } = usePresetDates(preset);
 
   const { data: heatmap, isLoading: heatmapLoading } = useHeatmap();
   const { data: lifecycle } = usePRLifecycle(from, to);
@@ -35,7 +36,15 @@ export default function AnalyticsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Analytics</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Analytics</h1>
+        {tab !== "Commits" && (
+          <DateRangePicker
+            value={preset}
+            onChange={(p) => setPreset(p)}
+          />
+        )}
+      </div>
 
       {/* Tabs */}
       <div className="flex border-b border-border">
@@ -69,7 +78,6 @@ export default function AnalyticsPage() {
       {/* PR Tab */}
       {tab === "Pull Requests" && (
         <div className="space-y-4">
-          {/* Lifecycle metrics */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-card border border-border rounded-xl p-6">
               <div className="text-sm text-muted-foreground">Avg. Time to First Review</div>
@@ -84,7 +92,7 @@ export default function AnalyticsPage() {
               </div>
             </div>
             <div className="bg-card border border-border rounded-xl p-6">
-              <div className="text-sm text-muted-foreground">PRs Merged (30d)</div>
+              <div className="text-sm text-muted-foreground">PRs Merged</div>
               <div className="text-3xl font-bold mt-1">{lifecycle?.mergedCount ?? 0}</div>
             </div>
             <div className="bg-card border border-border rounded-xl p-6">
@@ -98,7 +106,6 @@ export default function AnalyticsPage() {
             </div>
           </div>
 
-          {/* Size distribution */}
           <div className="bg-card border border-border rounded-xl p-6">
             <h2 className="font-semibold mb-4">PR Size Distribution (by changed files)</h2>
             <ResponsiveContainer width="100%" height={200}>
@@ -128,7 +135,7 @@ export default function AnalyticsPage() {
         <div className="space-y-4">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-card border border-border rounded-xl p-6">
-              <div className="text-sm text-muted-foreground">Reviews Given (30d)</div>
+              <div className="text-sm text-muted-foreground">Reviews Given</div>
               <div className="text-3xl font-bold mt-1">{reviews?.totalReviewsGiven ?? 0}</div>
             </div>
             <div className="bg-card border border-border rounded-xl p-6">

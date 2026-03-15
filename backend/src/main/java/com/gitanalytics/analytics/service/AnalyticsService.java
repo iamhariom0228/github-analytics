@@ -290,6 +290,248 @@ public class AnalyticsService {
         }
     }
 
+    // ---------- Insights ----------
+
+    @SuppressWarnings("unchecked")
+    public List<InsightDto> getInsights(UUID userId, String login, String timezone) {
+        List<InsightDto> insights = new ArrayList<>();
+        String tz = timezone != null ? timezone : "UTC";
+
+        // 1. Most productive day + hour (all-time, no date filter)
+        try {
+            Object[] peak = (Object[]) em.createNativeQuery("""
+                SELECT CAST(EXTRACT(DOW FROM c.committed_at AT TIME ZONE :tz) AS int) AS day,
+                       CAST(EXTRACT(HOUR FROM c.committed_at AT TIME ZONE :tz) AS int) AS hour,
+                       COUNT(*) AS cnt
+                FROM commits c JOIN tracked_repos r ON c.repo_id = r.id
+                WHERE r.user_id = :userId AND c.author_login = :login
+                GROUP BY day, hour ORDER BY cnt DESC LIMIT 1
+                """)
+                .setParameter("userId", userId).setParameter("login", login).setParameter("tz", tz)
+                .getSingleResult();
+            String[] dayNames = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
+            String[] fullDayNames = {"Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"};
+            int day = ((Number) peak[0]).intValue();
+            int hour = ((Number) peak[1]).intValue();
+            String ampm = hour < 12 ? (hour == 0 ? "12am" : hour + "am") : (hour == 12 ? "12pm" : (hour - 12) + "pm");
+            insights.add(new InsightDto(
+                "You're most productive on " + fullDayNames[day] + "s around " + String.format("%02d:00", hour) + ".",
+                "info",
+                dayNames[day] + " " + ampm,
+                "Peak Coding Time"
+            ));
+        } catch (Exception ignored) {}
+
+        // 2. Weekday vs weekend (all-time, no date filter)
+        try {
+            Object[] ww = (Object[]) em.createNativeQuery("""
+                SELECT
+                  COUNT(*) FILTER (WHERE CAST(EXTRACT(DOW FROM c.committed_at AT TIME ZONE :tz) AS int) BETWEEN 1 AND 5),
+                  COUNT(*) FILTER (WHERE CAST(EXTRACT(DOW FROM c.committed_at AT TIME ZONE :tz) AS int) IN (0,6))
+                FROM commits c JOIN tracked_repos r ON c.repo_id = r.id
+                WHERE r.user_id = :userId AND c.author_login = :login
+                """)
+                .setParameter("userId", userId).setParameter("login", login).setParameter("tz", tz)
+                .getSingleResult();
+            long weekday = ((Number) ww[0]).longValue();
+            long weekend = ((Number) ww[1]).longValue();
+            if (weekday + weekend > 0) {
+                int weekendPct = (int) Math.round((double) weekend / (weekday + weekend) * 100);
+                int weekdayPct = 100 - weekendPct;
+                if (weekendPct >= 30) {
+                    insights.add(new InsightDto(
+                        "You often code on weekends — " + weekendPct + "% of your commits happen on Sat/Sun.",
+                        "info",
+                        weekendPct + "%",
+                        "Weekend Commits"
+                    ));
+                } else {
+                    insights.add(new InsightDto(
+                        "You're a weekday coder — " + weekdayPct + "% of your commits happen Mon–Fri.",
+                        "info",
+                        weekdayPct + "%",
+                        "Weekday Commits"
+                    ));
+                }
+            }
+        } catch (Exception ignored) {}
+
+        // 3. Commit trend: last 30d vs previous 30d
+        try {
+            Object[] trend = (Object[]) em.createNativeQuery("""
+                SELECT
+                  COUNT(*) FILTER (WHERE c.committed_at > NOW() - INTERVAL '30 days'),
+                  COUNT(*) FILTER (WHERE c.committed_at BETWEEN NOW() - INTERVAL '60 days' AND NOW() - INTERVAL '30 days')
+                FROM commits c JOIN tracked_repos r ON c.repo_id = r.id
+                WHERE r.user_id = :userId AND c.author_login = :login
+                """)
+                .setParameter("userId", userId).setParameter("login", login)
+                .getSingleResult();
+            long last30 = ((Number) trend[0]).longValue();
+            long prev30 = ((Number) trend[1]).longValue();
+            if (prev30 > 0) {
+                long changePct = Math.round((double)(last30 - prev30) / prev30 * 100);
+                if (changePct >= 20) {
+                    insights.add(new InsightDto(
+                        "Your commit activity is up " + changePct + "% compared to the previous 30 days.",
+                        "positive",
+                        "+" + changePct + "%",
+                        "vs Prev 30 Days"
+                    ));
+                } else if (changePct <= -20) {
+                    insights.add(new InsightDto(
+                        "Your commit activity dropped " + Math.abs(changePct) + "% vs last month.",
+                        "warning",
+                        changePct + "%",
+                        "vs Prev 30 Days"
+                    ));
+                } else {
+                    insights.add(new InsightDto(
+                        "Your commit pace is steady — " + last30 + " commits this month vs " + prev30 + " last month.",
+                        "info",
+                        last30 + " commits",
+                        "Last 30 Days"
+                    ));
+                }
+            } else if (last30 > 0) {
+                insights.add(new InsightDto(
+                    "You've made " + last30 + " commits in the last 30 days — great momentum!",
+                    "positive",
+                    String.valueOf(last30),
+                    "Commits (30d)"
+                ));
+            }
+        } catch (Exception ignored) {}
+
+        // 4. Stale PRs
+        try {
+            long stale = ((Number) em.createNativeQuery("""
+                SELECT COUNT(*) FROM pull_requests pr
+                JOIN tracked_repos r ON pr.repo_id = r.id
+                WHERE r.user_id = :userId AND pr.state = 'OPEN'
+                  AND pr.created_at < NOW() - INTERVAL '7 days'
+                """)
+                .setParameter("userId", userId)
+                .getSingleResult()).longValue();
+            if (stale > 0) {
+                insights.add(new InsightDto(
+                    stale + " PR" + (stale > 1 ? "s have" : " has") + " been open for over 7 days without being merged.",
+                    "warning",
+                    String.valueOf(stale),
+                    "Stale PRs"
+                ));
+            }
+        } catch (Exception ignored) {}
+
+        // 5. PR merge time
+        try {
+            Object raw = em.createNativeQuery("""
+                SELECT AVG(EXTRACT(EPOCH FROM (merged_at - created_at))/3600)
+                FROM pull_requests pr JOIN tracked_repos r ON pr.repo_id = r.id
+                WHERE r.user_id = :userId AND pr.author_login = :login
+                  AND pr.merged_at IS NOT NULL
+                  AND pr.created_at > NOW() - INTERVAL '90 days'
+                """)
+                .setParameter("userId", userId).setParameter("login", login)
+                .getSingleResult();
+            if (raw != null) {
+                double avgHours = ((Number) raw).doubleValue();
+                String metricVal = avgHours < 1 ? Math.round(avgHours * 60) + "m" : String.format("%.0fh", avgHours);
+                if (avgHours < 4) {
+                    insights.add(new InsightDto(
+                        "Your PRs are merged in under 4 hours on average — excellent turnaround!",
+                        "positive",
+                        metricVal,
+                        "Avg Merge Time"
+                    ));
+                } else if (avgHours > 48) {
+                    insights.add(new InsightDto(
+                        "Consider breaking PRs into smaller chunks for faster reviews.",
+                        "warning",
+                        metricVal,
+                        "Avg Merge Time"
+                    ));
+                } else {
+                    insights.add(new InsightDto(
+                        "Your average PR merge time is " + metricVal + ".",
+                        "info",
+                        metricVal,
+                        "Avg Merge Time"
+                    ));
+                }
+            }
+        } catch (Exception ignored) {}
+
+        // 6. Review style
+        try {
+            Object[] rv = (Object[]) em.createNativeQuery("""
+                SELECT
+                  COUNT(*) FILTER (WHERE r.state = 'APPROVED'),
+                  COUNT(*) FILTER (WHERE r.state = 'CHANGES_REQUESTED'),
+                  COUNT(*)
+                FROM pr_reviews r JOIN pull_requests pr ON r.pr_id = pr.id
+                JOIN tracked_repos tr ON pr.repo_id = tr.id
+                WHERE tr.user_id = :userId AND r.reviewer_login = :login
+                  AND r.submitted_at > NOW() - INTERVAL '90 days'
+                """)
+                .setParameter("userId", userId).setParameter("login", login)
+                .getSingleResult();
+            long approved = ((Number) rv[0]).longValue();
+            long changesRequested = ((Number) rv[1]).longValue();
+            long total = ((Number) rv[2]).longValue();
+            if (total >= 5) {
+                int approvePct = (int) Math.round((double) approved / total * 100);
+                if (approvePct >= 80) {
+                    insights.add(new InsightDto(
+                        "You approve " + approvePct + "% of PRs you review — you're a collaborative reviewer.",
+                        "positive",
+                        approvePct + "%",
+                        "Approval Rate"
+                    ));
+                } else if (changesRequested > approved) {
+                    insights.add(new InsightDto(
+                        "You request changes more often than you approve — you hold the bar high.",
+                        "info",
+                        approvePct + "%",
+                        "Approval Rate"
+                    ));
+                }
+            }
+        } catch (Exception ignored) {}
+
+        if (insights.isEmpty()) {
+            try {
+                Object totalRaw = em.createNativeQuery("""
+                    SELECT COUNT(*) FROM commits c JOIN tracked_repos r ON c.repo_id = r.id
+                    WHERE r.user_id = :userId AND c.author_login = :login
+                    """)
+                    .setParameter("userId", userId).setParameter("login", login)
+                    .getSingleResult();
+                long total = ((Number) totalRaw).longValue();
+                if (total > 0) {
+                    insights.add(new InsightDto(
+                        "You have " + total + " commits tracked across your repositories.",
+                        "info",
+                        String.valueOf(total),
+                        "Total Commits"
+                    ));
+                } else {
+                    insights.add(new InsightDto(
+                        "Sync a repository to start seeing personalized insights.",
+                        "info"
+                    ));
+                }
+            } catch (Exception ignored) {
+                insights.add(new InsightDto(
+                    "Sync a repository to start seeing personalized insights.",
+                    "info"
+                ));
+            }
+        }
+
+        return insights;
+    }
+
     // ---------- Reviews Summary ----------
 
     public ReviewsSummaryDto getReviewsSummary(UUID userId, String login, OffsetDateTime from, OffsetDateTime to) {

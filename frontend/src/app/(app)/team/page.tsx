@@ -3,14 +3,15 @@
 import { useState } from "react";
 import { useRepos } from "@/hooks/useRepos";
 import { useLeaderboard, useBusFactor, useStalePRs } from "@/hooks/useAnalytics";
-import { formatDistanceToNow, subDays, formatISO } from "date-fns";
+import { DateRangePicker, usePresetDates } from "@/components/shared/DateRangePicker";
+import type { DatePreset } from "@/components/shared/DateRangePicker";
+import { formatDistanceToNow } from "date-fns";
 
 export default function TeamPage() {
   const { data: repos } = useRepos();
   const [selectedRepoId, setSelectedRepoId] = useState<string>("");
-
-  const from = formatISO(subDays(new Date(), 30));
-  const to = formatISO(new Date());
+  const [preset, setPreset] = useState<DatePreset>("30d");
+  const { from, to } = usePresetDates(preset);
 
   const repoId = selectedRepoId || repos?.[0]?.id || "";
   const { data: leaderboard } = useLeaderboard(repoId, from, to);
@@ -19,17 +20,20 @@ export default function TeamPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold">Team Analytics</h1>
-        <select
-          value={repoId}
-          onChange={(e) => setSelectedRepoId(e.target.value)}
-          className="border border-input rounded-md px-3 py-1.5 text-sm bg-background"
-        >
-          {repos?.map((r) => (
-            <option key={r.id} value={r.id}>{r.fullName}</option>
-          ))}
-        </select>
+        <div className="flex items-center gap-3">
+          <DateRangePicker value={preset} onChange={(p) => setPreset(p)} />
+          <select
+            value={repoId}
+            onChange={(e) => setSelectedRepoId(e.target.value)}
+            className="border border-input rounded-md px-3 py-1.5 text-sm bg-background"
+          >
+            {repos?.map((r) => (
+              <option key={r.id} value={r.id}>{r.fullName}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Bus factor */}
@@ -57,7 +61,7 @@ export default function TeamPage() {
 
       {/* Leaderboard */}
       <div className="bg-card border border-border rounded-xl p-6">
-        <h2 className="font-semibold mb-4">Contributor Leaderboard (Last 30 days)</h2>
+        <h2 className="font-semibold mb-4">Contributor Leaderboard</h2>
         {!leaderboard?.length ? (
           <p className="text-muted-foreground text-sm">No data yet — sync a repository first.</p>
         ) : (
@@ -94,7 +98,7 @@ export default function TeamPage() {
         ) : (
           <div className="space-y-2">
             {stalePRs.map((pr) => (
-              <div key={pr.id} className="flex justify-between items-center p-3 bg-orange-50 border border-orange-200 rounded-lg">
+              <div key={pr.id} className="flex justify-between items-center p-3 bg-orange-50 border border-orange-200 rounded-lg dark:bg-orange-950/20 dark:border-orange-900/40">
                 <span className="text-sm font-medium">#{pr.prNumber} {pr.title}</span>
                 <span className="text-xs text-orange-600">
                   {formatDistanceToNow(new Date(pr.createdAt), { addSuffix: true })}

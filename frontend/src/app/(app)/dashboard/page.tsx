@@ -1,12 +1,14 @@
 "use client";
 
-import { useDashboard } from "@/hooks/useAnalytics";
+import { useDashboard, useInsights } from "@/hooks/useAnalytics";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { RecentPRsTable } from "@/components/dashboard/RecentPRsTable";
+import { InsightsPanel } from "@/components/dashboard/InsightsPanel";
 import { formatHours } from "@/lib/utils";
 
 export default function DashboardPage() {
   const { data, isLoading, error } = useDashboard();
+  const { data: insights } = useInsights();
 
   if (isLoading) {
     return (
@@ -50,6 +52,9 @@ export default function DashboardPage() {
           value={formatHours(data?.avgMergeTimeHours ?? 0)}
         />
       </div>
+
+      {/* Insights */}
+      {insights && insights.length > 0 && <InsightsPanel insights={insights} />}
 
       {/* Recent PRs */}
       <div className="bg-card border border-border rounded-xl p-6">

@@ -98,4 +98,14 @@ public class AnalyticsController {
         UUID userId = UUID.fromString(principal.getUsername());
         return ResponseEntity.ok(ApiResponse.ok(analyticsService.getStalePRs(userId, repoId, olderThanDays)));
     }
+
+    @GetMapping("/insights")
+    public ResponseEntity<ApiResponse<List<InsightDto>>> getInsights(
+            @AuthenticationPrincipal UserDetails principal,
+            @RequestParam(defaultValue = "UTC") String timezone) {
+        UUID userId = UUID.fromString(principal.getUsername());
+        String login = userRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found")).getUsername();
+        return ResponseEntity.ok(ApiResponse.ok(analyticsService.getInsights(userId, login, timezone)));
+    }
 }

@@ -40,6 +40,7 @@ import type {
   DigestPreferences,
   GitHubRepoSuggestion,
   PrSummary,
+  Insight,
 } from "@/types";
 import type { ApiResponse } from "@/types";
 
@@ -122,6 +123,11 @@ export const getStalePRs = (repoId: string, olderThanDays = 7) =>
     .get<ApiResponse<PrSummary[]>>("/analytics/team/stale-prs", {
       params: { repoId, olderThanDays },
     })
+    .then(unwrap);
+
+export const getInsights = (timezone?: string) =>
+  apiClient
+    .get<ApiResponse<Insight[]>>("/analytics/insights", { params: { timezone } })
     .then(unwrap);
 
 // Digest
