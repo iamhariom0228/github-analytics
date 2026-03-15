@@ -69,6 +69,7 @@ app:
     client-secret: ${GITHUB_CLIENT_SECRET}
     redirect-uri: ${GITHUB_REDIRECT_URI:http://localhost:8080/api/v1/auth/github/callback}
     webhook-secret: ${GITHUB_WEBHOOK_SECRET:}
+    webhook-url: ${GITHUB_WEBHOOK_URL:}
 
   encryption:
     key: ${ENCRYPTION_KEY:changeme-32-byte-key-for-aes-gcm!}

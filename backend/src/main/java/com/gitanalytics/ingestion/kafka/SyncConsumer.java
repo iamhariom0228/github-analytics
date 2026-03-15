@@ -11,6 +11,7 @@ import com.gitanalytics.shared.kafka.events.SyncCompletedEvent;
 import com.gitanalytics.shared.kafka.events.SyncRequestedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +35,7 @@ public class SyncConsumer {
     private final GitHubApiClient gitHubApiClient;
     private final GitHubOAuthService gitHubOAuthService;
     private final SyncProducer syncProducer;
+    private final RedisTemplate<String, Object> redisTemplate;
 
     @KafkaListener(topics = "ga.sync.requested", groupId = "github-analytics")
     @Transactional
@@ -56,6 +58,7 @@ public class SyncConsumer {
         job.setStartedAt(OffsetDateTime.now());
         syncJobRepository.save(job);
 
+        String lockKey = "ga:sync:lock:" + repo.getId();
         try {
             User user = userRepository.findById(event.getUserId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -88,6 +91,9 @@ public class SyncConsumer {
             job.setCompletedAt(OffsetDateTime.now());
             job.setErrorMessage(e.getMessage());
             syncJobRepository.save(job);
+        } finally {
+            // Always release the lock so re-syncs aren't blocked
+            redisTemplate.delete(lockKey);
         }
     }
 
@@ -98,19 +104,46 @@ public class SyncConsumer {
 
         for (GitHubApiClient.GitHubCommitDto dto : commits) {
             if (dto.getCommit() == null || dto.getCommit().getAuthor() == null) continue;
+
+            // Fetch individual commit for stats (additions/deletions)
+            int additions = 0, deletions = 0;
+            String authorLogin = dto.getAuthor() != null ? dto.getAuthor().getLogin() : null;
+            Long authorGithubId = dto.getAuthor() != null ? dto.getAuthor().getId() : null;
+
+            GitHubApiClient.GitHubCommitDetailDto detail =
+                gitHubApiClient.getCommitDetail(token, userId, repo.getOwner(), repo.getName(), dto.getSha());
+            if (detail != null) {
+                if (detail.getStats() != null) {
+                    additions = detail.getStats().getAdditions();
+                    deletions = detail.getStats().getDeletions();
+                }
+                // Fall back to detail's author if list response had null author
+                if (authorLogin == null && detail.getAuthor() != null) {
+                    authorLogin = detail.getAuthor().getLogin();
+                    authorGithubId = detail.getAuthor().getId();
+                }
+            }
+
+            // Final fallback: use commit author name if GitHub user still unresolved
+            if (authorLogin == null && dto.getCommit().getAuthor() != null) {
+                authorLogin = dto.getCommit().getAuthor().getName();
+            }
+
             Commit commit = Commit.builder()
                 .repo(repo)
                 .sha(dto.getSha())
-                .authorLogin(dto.getAuthor() != null ? dto.getAuthor().getLogin() : null)
-                .authorGithubId(dto.getAuthor() != null ? dto.getAuthor().getId() : null)
+                .authorLogin(authorLogin)
+                .authorGithubId(authorGithubId)
                 .messageSummary(firstLine(dto.getCommit().getMessage()))
+                .additions(additions)
+                .deletions(deletions)
                 .committedAt(dto.getCommit().getAuthor().getDate())
                 .build();
             try {
-                commitRepository.save(commit);
+                commitRepository.upsert(commit);
                 count.incrementAndGet();
             } catch (Exception e) {
-                log.debug("Commit already exists: {} - skipping", dto.getSha());
+                log.debug("Failed to upsert commit {}: {}", dto.getSha(), e.getMessage());
             }
         }
     }

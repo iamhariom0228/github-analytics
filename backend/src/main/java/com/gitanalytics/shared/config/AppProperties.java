@@ -27,6 +27,7 @@ public class AppProperties {
         private String clientSecret;
         private String redirectUri;
         private String webhookSecret;
+        private String webhookUrl;
     }
 
     @Data

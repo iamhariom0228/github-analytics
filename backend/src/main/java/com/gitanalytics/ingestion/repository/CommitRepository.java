@@ -32,7 +32,11 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
                    "message_summary, additions, deletions, committed_at) " +
                    "VALUES (:#{#c.repo.id}, :#{#c.sha}, :#{#c.authorLogin}, :#{#c.authorGithubId}, " +
                    ":#{#c.messageSummary}, :#{#c.additions}, :#{#c.deletions}, :#{#c.committedAt}) " +
-                   "ON CONFLICT (repo_id, sha) DO NOTHING",
+                   "ON CONFLICT (repo_id, sha) DO UPDATE SET " +
+                   "author_login = EXCLUDED.author_login, " +
+                   "author_github_id = EXCLUDED.author_github_id, " +
+                   "additions = EXCLUDED.additions, " +
+                   "deletions = EXCLUDED.deletions",
            nativeQuery = true)
     @Modifying
     void upsert(@org.springframework.data.repository.query.Param("c") Commit commit);

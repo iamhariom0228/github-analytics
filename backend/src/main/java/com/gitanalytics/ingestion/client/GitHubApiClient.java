@@ -98,6 +98,33 @@ public class GitHubApiClient {
         return all;
     }
 
+    public GitHubCommitDetailDto getCommitDetail(String accessToken, UUID userId,
+                                                  String owner, String repo, String sha) {
+        checkRateLimit(userId);
+        try {
+            return webClientBuilder.build()
+                .get()
+                .uri(GITHUB_API_BASE + "/repos/" + owner + "/" + repo + "/commits/" + sha)
+                .header("Authorization", "Bearer " + accessToken)
+                .header("Accept", "application/vnd.github+json")
+                .exchangeToMono(resp -> {
+                    String remaining = resp.headers().asHttpHeaders().getFirst("X-RateLimit-Remaining");
+                    if (remaining != null) {
+                        redisTemplate.opsForValue().set("ga:ratelimit:gh:" + userId, remaining, 1, TimeUnit.HOURS);
+                    }
+                    return resp.bodyToMono(GitHubCommitDetailDto.class);
+                })
+                .onErrorResume(WebClientResponseException.class, e -> {
+                    log.warn("Failed to get commit detail {}: {}", sha, e.getStatusCode());
+                    return Mono.empty();
+                })
+                .block();
+        } catch (Exception e) {
+            log.warn("Could not fetch commit detail for {}: {}", sha, e.getMessage());
+            return null;
+        }
+    }
+
     public List<GitHubReviewDto> getReviews(String accessToken, UUID userId,
                                              String owner, String repo, int prNumber) {
         return get(accessToken, userId,
@@ -181,9 +208,9 @@ public class GitHubApiClient {
     public static class GitHubRepoDto {
         private Long id;
         private String name;
-        @JsonProperty(value = "full_name", access = JsonProperty.Access.READ_ONLY)
+        @JsonProperty("full_name")
         private String fullName;
-        @JsonProperty(value = "private", access = JsonProperty.Access.READ_ONLY)
+        @JsonProperty("private")
         private boolean privateRepo;
         private OwnerDto owner;
 
@@ -203,6 +230,38 @@ public class GitHubApiClient {
         public static class CommitDetail {
             private AuthorDetail author;
             private String message;
+
+            @Data
+            public static class AuthorDetail {
+                private String name;
+                private OffsetDateTime date;
+            }
+        }
+
+        @Data
+        public static class AuthorDto {
+            private Long id;
+            private String login;
+        }
+    }
+
+    @Data
+    public static class GitHubCommitDetailDto {
+        private String sha;
+        private CommitDetail commit;
+        private AuthorDto author;
+        private StatsDto stats;
+
+        @Data
+        public static class StatsDto {
+            private int additions;
+            private int deletions;
+            private int total;
+        }
+
+        @Data
+        public static class CommitDetail {
+            private AuthorDetail author;
 
             @Data
             public static class AuthorDetail {

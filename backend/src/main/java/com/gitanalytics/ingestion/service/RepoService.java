@@ -12,6 +12,7 @@ import com.gitanalytics.ingestion.entity.TrackedRepo;
 import com.gitanalytics.ingestion.kafka.SyncProducer;
 import com.gitanalytics.ingestion.repository.SyncJobRepository;
 import com.gitanalytics.ingestion.repository.TrackedRepoRepository;
+import com.gitanalytics.shared.config.AppProperties;
 import com.gitanalytics.shared.exception.ResourceNotFoundException;
 import com.gitanalytics.shared.exception.UnauthorizedException;
 import com.gitanalytics.shared.kafka.events.SyncRequestedEvent;
@@ -37,6 +38,7 @@ public class RepoService {
     private final GitHubOAuthService gitHubOAuthService;
     private final SyncProducer syncProducer;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final AppProperties appProperties;
 
     public List<RepoDto> getUserRepos(UUID userId) {
         return trackedRepoRepository.findByUserId(userId).stream()
@@ -71,6 +73,19 @@ public class RepoService {
             .syncStatus(TrackedRepo.SyncStatus.PENDING)
             .build());
 
+        // Register GitHub webhook if URL is configured
+        String webhookUrl = appProperties.getGithub().getWebhookUrl();
+        String webhookSecret = appProperties.getGithub().getWebhookSecret();
+        if (webhookUrl != null && !webhookUrl.isBlank()) {
+            try {
+                gitHubApiClient.createWebhook(accessToken, userId,
+                    ghRepo.getOwner().getLogin(), ghRepo.getName(), webhookUrl, webhookSecret);
+                log.info("Registered GitHub webhook for {}", ghRepo.getFullName());
+            } catch (Exception e) {
+                log.warn("Failed to register webhook for {}: {}", ghRepo.getFullName(), e.getMessage());
+            }
+        }
+
         // Trigger initial full sync
         triggerSync(user, repo, "FULL_SYNC");
 
@@ -95,7 +110,7 @@ public class RepoService {
             throw new UnauthorizedException("Not your repository");
         }
         User user = userRepository.findById(userId).orElseThrow();
-        SyncJob job = triggerSync(user, repo, "INCREMENTAL_SYNC");
+        SyncJob job = triggerSync(user, repo, "FULL_SYNC");
         return new SyncStatusDto(job.getId(), job.getStatus().name(), repo.getSyncStatus().name());
     }
 

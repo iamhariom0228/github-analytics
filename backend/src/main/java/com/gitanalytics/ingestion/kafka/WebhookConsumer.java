@@ -4,10 +4,14 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gitanalytics.ingestion.entity.PullRequest;
 import com.gitanalytics.ingestion.entity.PrReview;
+import com.gitanalytics.ingestion.entity.SyncJob;
+import com.gitanalytics.ingestion.entity.TrackedRepo;
 import com.gitanalytics.ingestion.repository.PullRequestRepository;
 import com.gitanalytics.ingestion.repository.PrReviewRepository;
+import com.gitanalytics.ingestion.repository.SyncJobRepository;
 import com.gitanalytics.ingestion.repository.TrackedRepoRepository;
 import com.gitanalytics.shared.kafka.events.SyncCompletedEvent;
+import com.gitanalytics.shared.kafka.events.SyncRequestedEvent;
 import com.gitanalytics.shared.kafka.events.WebhookReceivedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +31,7 @@ public class WebhookConsumer {
     private final TrackedRepoRepository trackedRepoRepository;
     private final PullRequestRepository pullRequestRepository;
     private final PrReviewRepository prReviewRepository;
+    private final SyncJobRepository syncJobRepository;
     private final SyncProducer syncProducer;
     private final ObjectMapper objectMapper;
 
@@ -39,7 +44,7 @@ public class WebhookConsumer {
             switch (event.getEventType()) {
                 case "pull_request" -> processPullRequestEvent(event.getRepoId(), payload);
                 case "pull_request_review" -> processPullRequestReviewEvent(event.getRepoId(), payload);
-                case "push" -> log.debug("Push event recorded for repo {}", event.getRepoId());
+                case "push" -> triggerIncrementalSync(event.getRepoId(), event.getUserId());
             }
             // Trigger cache invalidation
             syncProducer.publishSyncCompleted(new SyncCompletedEvent(
@@ -47,6 +52,25 @@ public class WebhookConsumer {
             ));
         } catch (Exception e) {
             log.error("Failed to process webhook event: {}", e.getMessage(), e);
+        }
+    }
+
+    private void triggerIncrementalSync(UUID repoId, UUID userId) {
+        TrackedRepo repo = trackedRepoRepository.findById(repoId).orElse(null);
+        if (repo == null || repo.getSyncStatus() == TrackedRepo.SyncStatus.SYNCING) return;
+        try {
+            SyncJob job = syncJobRepository.save(SyncJob.builder()
+                .user(repo.getUser())
+                .repo(repo)
+                .jobType(SyncJob.JobType.INCREMENTAL_SYNC)
+                .status(SyncJob.JobStatus.PENDING)
+                .build());
+            syncProducer.publishSyncRequested(new SyncRequestedEvent(
+                job.getId(), userId, repoId, "INCREMENTAL_SYNC"
+            ));
+            log.info("Triggered incremental sync for repo {} via webhook push", repo.getFullName());
+        } catch (Exception e) {
+            log.error("Failed to trigger sync from push webhook for repo {}: {}", repoId, e.getMessage());
         }
     }
 
