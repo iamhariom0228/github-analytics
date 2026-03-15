@@ -20,8 +20,9 @@ const healthConfig = {
   "Needs Attention": { icon: ShieldX, color: "text-red-500", bg: "bg-red-500/10" },
 };
 
-function HealthBadge({ repoId, syncStatus }: { repoId: string; syncStatus: string }) {
-  const [expanded, setExpanded] = useState(false);
+function HealthBadge({ repoId, syncStatus, expanded, onToggle }: {
+  repoId: string; syncStatus: string; expanded: boolean; onToggle: () => void;
+}) {
   const { data: health, isLoading } = useRepoHealth(repoId);
 
   if (syncStatus !== "DONE" || isLoading) return null;
@@ -33,7 +34,7 @@ function HealthBadge({ repoId, syncStatus }: { repoId: string; syncStatus: strin
   return (
     <div className="relative">
       <button
-        onClick={() => setExpanded((e) => !e)}
+        onClick={onToggle}
         className={cn("flex items-center gap-1.5 text-xs px-2 py-0.5 rounded font-medium border", cfg.bg, cfg.color, "border-current/20")}
       >
         <Icon className="w-3 h-3" />
@@ -73,6 +74,7 @@ export default function ReposPage() {
   const triggerSync = useTriggerSync();
 
   const [showModal, setShowModal] = useState(false);
+  const [expandedHealthId, setExpandedHealthId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const { data: suggestions } = useRepoSuggestions(showModal);
 
@@ -133,7 +135,12 @@ export default function ReposPage() {
                       Synced {new Date(repo.lastSyncedAt).toLocaleDateString()}
                     </span>
                   )}
-                  <HealthBadge repoId={repo.id} syncStatus={repo.syncStatus} />
+                  <HealthBadge
+                    repoId={repo.id}
+                    syncStatus={repo.syncStatus}
+                    expanded={expandedHealthId === repo.id}
+                    onToggle={() => setExpandedHealthId(expandedHealthId === repo.id ? null : repo.id)}
+                  />
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">

@@ -1,23 +1,54 @@
 "use client";
 
-import { useDashboard, useInsights, useAiSummary } from "@/hooks/useAnalytics";
+import { useState } from "react";
+import { useDashboard, useInsights, useAiSummary, useOverview } from "@/hooks/useAnalytics";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { RecentPRsTable } from "@/components/dashboard/RecentPRsTable";
 import { InsightsPanel } from "@/components/dashboard/InsightsPanel";
+import { DateRangePicker, usePresetDates } from "@/components/shared/DateRangePicker";
+import type { DatePreset } from "@/components/shared/DateRangePicker";
 import { formatHours } from "@/lib/utils";
+import { TrendingUp, GitPullRequest, Star, Code2 } from "lucide-react";
 
 function Skeleton({ className = "" }: { className?: string }) {
   return <div className={`animate-pulse bg-muted rounded ${className}`} />;
 }
 
+function StatCard({ label, value, icon: Icon, isLoading }: {
+  label: string; value: string | number; icon: React.ElementType; isLoading: boolean;
+}) {
+  return (
+    <div className="bg-card border border-border rounded-xl p-5 flex items-center gap-4">
+      <div className="p-2 bg-primary/10 rounded-lg">
+        <Icon className="w-5 h-5 text-primary" />
+      </div>
+      <div>
+        <div className="text-xs text-muted-foreground">{label}</div>
+        {isLoading ? (
+          <Skeleton className="h-7 w-16 mt-1" />
+        ) : (
+          <div className="text-2xl font-bold">{value}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
+  const [preset, setPreset] = useState<DatePreset>("30d");
+  const { from, to } = usePresetDates(preset);
+
   const { data, isLoading, error } = useDashboard();
-  const { data: insights, isLoading: insightsLoading } = useInsights();
-  const { data: aiSummary, isLoading: aiLoading } = useAiSummary();
+  const { data: overview, isLoading: overviewLoading } = useOverview(from, to);
+  const { data: insights, isLoading: insightsLoading } = useInsights(undefined, from, to);
+  const { data: aiSummary, isLoading: aiLoading } = useAiSummary(undefined, from, to);
 
   return (
     <div className="space-y-8">
-      <h1 className="text-2xl font-bold">Dashboard</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <DateRangePicker value={preset} onChange={(p) => setPreset(p)} />
+      </div>
 
       {error ? (
         <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 text-center">
@@ -25,7 +56,16 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
-          {/* Metric cards */}
+          {/* Period overview */}
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            <StatCard label="Commits" value={overview?.commits ?? 0} icon={TrendingUp} isLoading={overviewLoading} />
+            <StatCard label="PRs Authored" value={overview?.prsAuthored ?? 0} icon={GitPullRequest} isLoading={overviewLoading} />
+            <StatCard label="Reviews Given" value={overview?.reviewsGiven ?? 0} icon={Star} isLoading={overviewLoading} />
+            <StatCard label="Lines Added" value={(overview?.linesAdded ?? 0).toLocaleString()} icon={Code2} isLoading={overviewLoading} />
+            <StatCard label="Lines Removed" value={(overview?.linesRemoved ?? 0).toLocaleString()} icon={Code2} isLoading={overviewLoading} />
+          </div>
+
+          {/* All-time metric cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {isLoading ? (
               [...Array(4)].map((_, i) => (

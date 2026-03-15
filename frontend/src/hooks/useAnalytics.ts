@@ -20,10 +20,10 @@ export function useDashboard() {
   return useQuery({ queryKey: ["dashboard"], queryFn: getDashboard });
 }
 
-export function useHeatmap(repoId?: string, timezone?: string) {
+export function useHeatmap(repoId?: string, timezone?: string, from?: string, to?: string) {
   return useQuery({
-    queryKey: ["heatmap", repoId, timezone],
-    queryFn: () => getHeatmap(repoId, timezone),
+    queryKey: ["heatmap", repoId, timezone, from, to],
+    queryFn: () => getHeatmap(repoId, timezone, from, to),
   });
 }
 
@@ -79,10 +79,10 @@ export function useStalePRs(repoId: string, days = 7) {
   });
 }
 
-export function useInsights(timezone?: string) {
+export function useInsights(timezone?: string, from?: string, to?: string) {
   return useQuery({
-    queryKey: ["insights", timezone],
-    queryFn: () => getInsights(timezone),
+    queryKey: ["insights", timezone, from, to],
+    queryFn: () => getInsights(timezone, from, to),
   });
 }
 
@@ -108,10 +108,10 @@ export function useRepoHealth(repoId: string) {
   });
 }
 
-export function useAiSummary(timezone?: string) {
+export function useAiSummary(timezone?: string, from?: string, to?: string) {
   return useQuery({
-    queryKey: ["ai-summary", timezone],
-    queryFn: () => getAiSummary(timezone),
-    staleTime: 6 * 60 * 60 * 1000, // 6 hours — matches Redis cache TTL
+    queryKey: ["ai-summary", timezone, from, to],
+    queryFn: () => getAiSummary(timezone, from, to),
+    staleTime: 6 * 60 * 60 * 1000, // 6 hours — matches Redis cache TTL per window
   });
 }

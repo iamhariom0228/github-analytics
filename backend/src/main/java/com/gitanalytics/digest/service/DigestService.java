@@ -87,7 +87,7 @@ public class DigestService {
 
         var streak = analyticsService.getStreak(userId, user.getUsername(), tz);
         var lifecycle = analyticsService.getPRLifecycle(userId, from, to);
-        var aiSummary = analyticsService.getAiSummary(userId, user.getUsername(), tz);
+        var aiSummary = analyticsService.getAiSummary(userId, user.getUsername(), tz, from, to);
 
         emailService.sendDigestEmail(user.getEmail(), user.getUsername(), weekStart,
             streak.getCurrentStreak(), lifecycle.getMergedCount(), lifecycle.getAvgHoursToMerge(),

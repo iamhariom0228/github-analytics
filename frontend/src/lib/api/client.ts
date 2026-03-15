@@ -81,10 +81,10 @@ export const getDashboard = () =>
   apiClient.get<ApiResponse<DashboardSummary>>("/dashboard").then(unwrap);
 
 // Analytics
-export const getHeatmap = (repoId?: string, timezone?: string) =>
+export const getHeatmap = (repoId?: string, timezone?: string, from?: string, to?: string) =>
   apiClient
     .get<ApiResponse<HeatmapCell[]>>("/analytics/commits/heatmap", {
-      params: { repoId, timezone },
+      params: { repoId, timezone, from, to },
     })
     .then(unwrap);
 
@@ -129,9 +129,9 @@ export const getStalePRs = (repoId: string, olderThanDays = 7) =>
     })
     .then(unwrap);
 
-export const getInsights = (timezone?: string) =>
+export const getInsights = (timezone?: string, from?: string, to?: string) =>
   apiClient
-    .get<ApiResponse<Insight[]>>("/analytics/insights", { params: { timezone } })
+    .get<ApiResponse<Insight[]>>("/analytics/insights", { params: { timezone, from, to } })
     .then(unwrap);
 
 export const getCommitTrend = (from: string, to: string, granularity = "daily") =>
@@ -151,9 +151,9 @@ export const getRepoHealth = (repoId: string) =>
     .get<ApiResponse<RepoHealth>>(`/analytics/repos/${repoId}/health`)
     .then(unwrap);
 
-export const getAiSummary = (timezone?: string) =>
+export const getAiSummary = (timezone?: string, from?: string, to?: string) =>
   apiClient
-    .get<ApiResponse<AiSummary>>("/analytics/ai-summary", { params: { timezone } })
+    .get<ApiResponse<AiSummary>>("/analytics/ai-summary", { params: { timezone, from, to } })
     .then(unwrap);
 
 // Digest

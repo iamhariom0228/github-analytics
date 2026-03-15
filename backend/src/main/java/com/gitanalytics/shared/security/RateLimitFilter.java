@@ -23,7 +23,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
 
     private final RedisTemplate<String, Object> redisTemplate;
 
-    private static final int MAX_REQUESTS_PER_MINUTE = 100;
+    private static final int MAX_REQUESTS_PER_MINUTE = 500;
     private static final Set<String> SKIP_PATHS = Set.of(
         "/auth/github", "/webhooks/github", "/actuator"
     );
@@ -56,7 +56,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
             response.setContentType(MediaType.APPLICATION_JSON_VALUE);
             response.getWriter().write(
-                "{\"success\":false,\"error\":\"Rate limit exceeded. Max 100 requests per minute.\",\"timestamp\":\""
+                "{\"success\":false,\"error\":\"Rate limit exceeded. Max 500 requests per minute.\",\"timestamp\":\""
                 + java.time.Instant.now() + "\"}"
             );
             return;

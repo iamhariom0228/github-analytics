@@ -17,6 +17,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import { logout } from "@/lib/api/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useEffect, useState } from "react";
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -31,6 +32,8 @@ export function Sidebar() {
   const qc = useQueryClient();
   const { data: user } = useAuth();
   const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const logoutMutation = useMutation({
     mutationFn: logout,
@@ -50,7 +53,7 @@ export function Sidebar() {
           className="p-1.5 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
           aria-label="Toggle theme"
         >
-          {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          {mounted && theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </button>
       </div>
 

@@ -123,11 +123,8 @@ public class SyncConsumer {
                     authorGithubId = detail.getAuthor().getId();
                 }
             }
-
-            // Final fallback: use commit author name if GitHub user still unresolved
-            if (authorLogin == null && dto.getCommit().getAuthor() != null) {
-                authorLogin = dto.getCommit().getAuthor().getName();
-            }
+            // If GitHub still can't resolve the author (email mismatch), store null.
+            // Incorrectly attributing to the repo owner would be wrong for team repos.
 
             Commit commit = Commit.builder()
                 .repo(repo)

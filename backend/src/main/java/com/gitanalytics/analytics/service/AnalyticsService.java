@@ -84,9 +84,11 @@ public class AnalyticsService {
 
     // ---------- Commit Heatmap ----------
 
-    public List<HeatmapCellDto> getCommitHeatmap(UUID userId, String repoId, String timezone) {
+    public List<HeatmapCellDto> getCommitHeatmap(UUID userId, String repoId, String timezone,
+                                                   OffsetDateTime from, OffsetDateTime to) {
         String tz = timezone != null ? timezone : "UTC";
         String repoFilter = repoId != null ? "AND r.id = :repoId" : "";
+        String dateFilter = (from != null && to != null) ? "AND c.committed_at BETWEEN :from AND :to" : "";
 
         String sql = """
             SELECT CAST(EXTRACT(DOW FROM c.committed_at AT TIME ZONE :tz) AS int) AS day,
@@ -96,7 +98,8 @@ public class AnalyticsService {
             JOIN tracked_repos r ON c.repo_id = r.id
             WHERE r.user_id = :userId
               AND c.author_login = (SELECT username FROM users WHERE id = :userId)
-              """ + repoFilter + """
+              """ + repoFilter + " " + dateFilter + """
+
             GROUP BY day, hour
             ORDER BY day, hour
             """;
@@ -105,6 +108,10 @@ public class AnalyticsService {
             .setParameter("userId", userId)
             .setParameter("tz", tz);
         if (repoId != null) query.setParameter("repoId", UUID.fromString(repoId));
+        if (from != null && to != null) {
+            query.setParameter("from", from);
+            query.setParameter("to", to);
+        }
 
         return ((List<Object[]>) query.getResultList()).stream()
             .map(row -> new HeatmapCellDto(
@@ -295,11 +302,19 @@ public class AnalyticsService {
     // ---------- Insights ----------
 
     @SuppressWarnings("unchecked")
-    public List<InsightDto> getInsights(UUID userId, String login, String timezone) {
+    public List<InsightDto> getInsights(UUID userId, String login, String timezone,
+                                        OffsetDateTime from, OffsetDateTime to) {
         List<InsightDto> insights = new ArrayList<>();
         String tz = timezone != null ? timezone : "UTC";
 
-        // 1. Most productive day + hour (all-time, no date filter)
+        // Use provided window, or default to last 30 days
+        OffsetDateTime effectiveTo = to != null ? to : OffsetDateTime.now();
+        OffsetDateTime effectiveFrom = from != null ? from : effectiveTo.minusDays(30);
+        long windowDays = java.time.Duration.between(effectiveFrom, effectiveTo).toDays();
+        String periodLabel = windowDays <= 7 ? "Last 7 Days" : windowDays <= 31 ? "Last 30 Days" :
+                             windowDays <= 93 ? "Last 90 Days" : "Selected Period";
+
+        // 1. Most productive day + hour (always all-time — behavioral pattern, not activity metric)
         try {
             Object[] peak = (Object[]) em.createNativeQuery("""
                 SELECT CAST(EXTRACT(DOW FROM c.committed_at AT TIME ZONE :tz) AS int) AS day,
@@ -324,7 +339,7 @@ public class AnalyticsService {
             ));
         } catch (Exception ignored) {}
 
-        // 2. Weekday vs weekend (all-time, no date filter)
+        // 2. Weekday vs weekend (always all-time — behavioral pattern)
         try {
             Object[] ww = (Object[]) em.createNativeQuery("""
                 SELECT
@@ -358,54 +373,57 @@ public class AnalyticsService {
             }
         } catch (Exception ignored) {}
 
-        // 3. Commit trend: last 30d vs previous 30d
+        // 3. Commit trend: selected window vs equivalent previous window
         try {
+            OffsetDateTime prevFrom = effectiveFrom.minusDays(windowDays);
             Object[] trend = (Object[]) em.createNativeQuery("""
                 SELECT
-                  COUNT(*) FILTER (WHERE c.committed_at > NOW() - INTERVAL '30 days'),
-                  COUNT(*) FILTER (WHERE c.committed_at BETWEEN NOW() - INTERVAL '60 days' AND NOW() - INTERVAL '30 days')
+                  COUNT(*) FILTER (WHERE c.committed_at BETWEEN :from AND :to),
+                  COUNT(*) FILTER (WHERE c.committed_at BETWEEN :prevFrom AND :prevTo)
                 FROM commits c JOIN tracked_repos r ON c.repo_id = r.id
                 WHERE r.user_id = :userId AND c.author_login = :login
                 """)
                 .setParameter("userId", userId).setParameter("login", login)
+                .setParameter("from", effectiveFrom).setParameter("to", effectiveTo)
+                .setParameter("prevFrom", prevFrom).setParameter("prevTo", effectiveFrom)
                 .getSingleResult();
-            long last30 = ((Number) trend[0]).longValue();
-            long prev30 = ((Number) trend[1]).longValue();
-            if (prev30 > 0) {
-                long changePct = Math.round((double)(last30 - prev30) / prev30 * 100);
+            long current = ((Number) trend[0]).longValue();
+            long previous = ((Number) trend[1]).longValue();
+            if (previous > 0) {
+                long changePct = Math.round((double)(current - previous) / previous * 100);
                 if (changePct >= 20) {
                     insights.add(new InsightDto(
-                        "Your commit activity is up " + changePct + "% compared to the previous 30 days.",
+                        "Your commit activity is up " + changePct + "% vs the previous " + windowDays + " days.",
                         "positive",
                         "+" + changePct + "%",
-                        "vs Prev 30 Days"
+                        "vs Prev Period"
                     ));
                 } else if (changePct <= -20) {
                     insights.add(new InsightDto(
-                        "Your commit activity dropped " + Math.abs(changePct) + "% vs last month.",
+                        "Your commit activity dropped " + Math.abs(changePct) + "% vs the previous " + windowDays + " days.",
                         "warning",
                         changePct + "%",
-                        "vs Prev 30 Days"
+                        "vs Prev Period"
                     ));
                 } else {
                     insights.add(new InsightDto(
-                        "Your commit pace is steady — " + last30 + " commits this month vs " + prev30 + " last month.",
+                        "Your commit pace is steady — " + current + " commits this period vs " + previous + " previously.",
                         "info",
-                        last30 + " commits",
-                        "Last 30 Days"
+                        current + " commits",
+                        periodLabel
                     ));
                 }
-            } else if (last30 > 0) {
+            } else if (current > 0) {
                 insights.add(new InsightDto(
-                    "You've made " + last30 + " commits in the last 30 days — great momentum!",
+                    "You've made " + current + " commits in this period — great momentum!",
                     "positive",
-                    String.valueOf(last30),
-                    "Commits (30d)"
+                    String.valueOf(current),
+                    periodLabel
                 ));
             }
         } catch (Exception ignored) {}
 
-        // 4. Stale PRs
+        // 4. Stale PRs — always current state, date range doesn't apply
         try {
             long stale = ((Number) em.createNativeQuery("""
                 SELECT COUNT(*) FROM pull_requests pr
@@ -425,16 +443,17 @@ public class AnalyticsService {
             }
         } catch (Exception ignored) {}
 
-        // 5. PR merge time
+        // 5. PR merge time — use selected window
         try {
             Object raw = em.createNativeQuery("""
                 SELECT AVG(EXTRACT(EPOCH FROM (merged_at - created_at))/3600)
                 FROM pull_requests pr JOIN tracked_repos r ON pr.repo_id = r.id
                 WHERE r.user_id = :userId AND pr.author_login = :login
                   AND pr.merged_at IS NOT NULL
-                  AND pr.created_at > NOW() - INTERVAL '90 days'
+                  AND pr.created_at BETWEEN :from AND :to
                 """)
                 .setParameter("userId", userId).setParameter("login", login)
+                .setParameter("from", effectiveFrom).setParameter("to", effectiveTo)
                 .getSingleResult();
             if (raw != null) {
                 double avgHours = ((Number) raw).doubleValue();
@@ -464,7 +483,7 @@ public class AnalyticsService {
             }
         } catch (Exception ignored) {}
 
-        // 6. Review style
+        // 6. Review style — use selected window
         try {
             Object[] rv = (Object[]) em.createNativeQuery("""
                 SELECT
@@ -474,9 +493,10 @@ public class AnalyticsService {
                 FROM pr_reviews r JOIN pull_requests pr ON r.pr_id = pr.id
                 JOIN tracked_repos tr ON pr.repo_id = tr.id
                 WHERE tr.user_id = :userId AND r.reviewer_login = :login
-                  AND r.submitted_at > NOW() - INTERVAL '90 days'
+                  AND r.submitted_at BETWEEN :from AND :to
                 """)
                 .setParameter("userId", userId).setParameter("login", login)
+                .setParameter("from", effectiveFrom).setParameter("to", effectiveTo)
                 .getSingleResult();
             long approved = ((Number) rv[0]).longValue();
             long changesRequested = ((Number) rv[1]).longValue();
@@ -732,10 +752,17 @@ public class AnalyticsService {
             .setParameter("to", to)
             .getResultList();
         return rows.stream()
-            .map(r -> new CommitTrendDto(
-                ((java.sql.Timestamp) r[0]).toInstant().atOffset(ZoneOffset.UTC).toLocalDate().toString(),
-                ((Number) r[1]).longValue()
-            ))
+            .map(r -> {
+                String date;
+                if (r[0] instanceof java.sql.Timestamp ts) {
+                    date = ts.toInstant().atOffset(ZoneOffset.UTC).toLocalDate().toString();
+                } else if (r[0] instanceof java.time.Instant inst) {
+                    date = inst.atOffset(ZoneOffset.UTC).toLocalDate().toString();
+                } else {
+                    date = r[0].toString().substring(0, 10);
+                }
+                return new CommitTrendDto(date, ((Number) r[1]).longValue());
+            })
             .toList();
     }
 
@@ -779,17 +806,19 @@ public class AnalyticsService {
 
     public record AiSummaryDto(String summary, boolean aiPowered) {}
 
-    public AiSummaryDto getAiSummary(UUID userId, String login, String timezone) {
+    public AiSummaryDto getAiSummary(UUID userId, String login, String timezone,
+                                      OffsetDateTime from, OffsetDateTime to) {
         if (!groqApiClient.isConfigured()) {
             return new AiSummaryDto("Connect Groq API to generate AI-powered summaries.", false);
         }
 
-        OffsetDateTime now = OffsetDateTime.now();
-        OffsetDateTime thirtyDaysAgo = now.minusDays(30);
+        OffsetDateTime effectiveTo = to != null ? to : OffsetDateTime.now();
+        OffsetDateTime effectiveFrom = from != null ? from : effectiveTo.minusDays(30);
+        long windowDays = java.time.Duration.between(effectiveFrom, effectiveTo).toDays();
 
-        long commits30d = countCommits(userId, login, thirtyDaysAgo, now);
+        long commits = countCommits(userId, login, effectiveFrom, effectiveTo);
         StreakDto streak = getStreak(userId, login, timezone);
-        PRLifecycleDto lifecycle = getPRLifecycle(userId, thirtyDaysAgo, now);
+        PRLifecycleDto lifecycle = getPRLifecycle(userId, effectiveFrom, effectiveTo);
 
         long stale = ((Number) em.createNativeQuery(
                 "SELECT COUNT(*) FROM pull_requests pr JOIN tracked_repos r ON pr.repo_id = r.id " +
@@ -797,11 +826,11 @@ public class AnalyticsService {
             .setParameter("userId", userId).getSingleResult()).longValue();
 
         String prompt = String.format(
-            "Developer '%s' stats (last 30 days): %d commits, %d PRs merged, avg merge time %.0f hours, " +
+            "Developer '%s' stats (last %d days): %d commits, %d PRs merged, avg merge time %.0f hours, " +
             "%d day streak, %d stale PRs open. " +
             "Write a 2-3 sentence coaching summary: highlight what's going well, flag one concern if any, give one actionable tip. " +
             "Be specific, concise, and encouraging. No bullet points. Plain text only.",
-            login, commits30d, lifecycle.getMergedCount(), lifecycle.getAvgHoursToMerge(),
+            login, windowDays, commits, lifecycle.getMergedCount(), lifecycle.getAvgHoursToMerge(),
             streak.getCurrentStreak(), stale
         );
 

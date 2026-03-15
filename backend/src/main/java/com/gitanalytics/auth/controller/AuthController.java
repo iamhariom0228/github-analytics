@@ -46,7 +46,7 @@ public class AuthController {
 
         Cookie cookie = new Cookie("jwt", token);
         cookie.setHttpOnly(true);
-        cookie.setSecure(true);
+        cookie.setSecure("true".equals(System.getenv("COOKIE_SECURE")));
         cookie.setPath("/");
         cookie.setMaxAge(7 * 24 * 60 * 60); // 7 days
         response.addCookie(cookie);
@@ -70,7 +70,7 @@ public class AuthController {
         // Clear cookie
         Cookie cookie = new Cookie("jwt", "");
         cookie.setHttpOnly(true);
-        cookie.setSecure(true);
+        cookie.setSecure("true".equals(System.getenv("COOKIE_SECURE")));
         cookie.setPath("/");
         cookie.setMaxAge(0);
         response.addCookie(cookie);

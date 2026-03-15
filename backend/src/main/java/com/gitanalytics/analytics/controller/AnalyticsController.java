@@ -28,9 +28,11 @@ public class AnalyticsController {
     public ResponseEntity<ApiResponse<List<HeatmapCellDto>>> getHeatmap(
             @AuthenticationPrincipal UserDetails principal,
             @RequestParam(required = false) String repoId,
-            @RequestParam(defaultValue = "UTC") String timezone) {
+            @RequestParam(defaultValue = "UTC") String timezone,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to) {
         UUID userId = UUID.fromString(principal.getUsername());
-        return ResponseEntity.ok(ApiResponse.ok(analyticsService.getCommitHeatmap(userId, repoId, timezone)));
+        return ResponseEntity.ok(ApiResponse.ok(analyticsService.getCommitHeatmap(userId, repoId, timezone, from, to)));
     }
 
     @GetMapping("/prs/lifecycle")
@@ -102,11 +104,13 @@ public class AnalyticsController {
     @GetMapping("/ai-summary")
     public ResponseEntity<ApiResponse<AnalyticsService.AiSummaryDto>> getAiSummary(
             @AuthenticationPrincipal UserDetails principal,
-            @RequestParam(defaultValue = "UTC") String timezone) {
+            @RequestParam(defaultValue = "UTC") String timezone,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to) {
         UUID userId = UUID.fromString(principal.getUsername());
         String login = userRepository.findById(userId)
             .orElseThrow(() -> new ResourceNotFoundException("User not found")).getUsername();
-        return ResponseEntity.ok(ApiResponse.ok(analyticsService.getAiSummary(userId, login, timezone)));
+        return ResponseEntity.ok(ApiResponse.ok(analyticsService.getAiSummary(userId, login, timezone, from, to)));
     }
 
     @GetMapping("/repos/{repoId}/health")
@@ -151,10 +155,12 @@ public class AnalyticsController {
     @GetMapping("/insights")
     public ResponseEntity<ApiResponse<List<InsightDto>>> getInsights(
             @AuthenticationPrincipal UserDetails principal,
-            @RequestParam(defaultValue = "UTC") String timezone) {
+            @RequestParam(defaultValue = "UTC") String timezone,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to) {
         UUID userId = UUID.fromString(principal.getUsername());
         String login = userRepository.findById(userId)
             .orElseThrow(() -> new ResourceNotFoundException("User not found")).getUsername();
-        return ResponseEntity.ok(ApiResponse.ok(analyticsService.getInsights(userId, login, timezone)));
+        return ResponseEntity.ok(ApiResponse.ok(analyticsService.getInsights(userId, login, timezone, from, to)));
     }
 }

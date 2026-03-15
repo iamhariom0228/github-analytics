@@ -61,7 +61,7 @@ export default function AnalyticsPage() {
   const [granularity, setGranularity] = useState<"daily" | "weekly">("daily");
   const { from, to } = usePresetDates(preset);
 
-  const { data: heatmap, isLoading: heatmapLoading } = useHeatmap();
+  const { data: heatmap, isLoading: heatmapLoading } = useHeatmap(undefined, undefined, from, to);
   const { data: trend, isLoading: trendLoading } = useCommitTrend(from, to, granularity);
   const { data: overview, isLoading: overviewLoading } = useOverview(from, to);
   const { data: lifecycle, isLoading: lifecycleLoading } = usePRLifecycle(from, to);
@@ -155,7 +155,7 @@ export default function AnalyticsPage() {
           </div>
 
           <div className="bg-card border border-border rounded-xl p-6">
-            <h2 className="font-semibold mb-4">Contribution Heatmap (All-Time, Hour × Day)</h2>
+            <h2 className="font-semibold mb-4">Contribution Heatmap (Hour × Day of Week)</h2>
             {heatmapLoading ? (
               <Skeleton className="h-40" />
             ) : (heatmap ?? []).length === 0 ? (
