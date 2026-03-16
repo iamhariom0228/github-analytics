@@ -103,6 +103,10 @@ public class WebhookConsumer {
         if (!prNode.get("closed_at").isNull())
             pr.setClosedAt(OffsetDateTime.parse(prNode.get("closed_at").asText()));
 
+        if (prNode.has("additions")) pr.setAdditions(prNode.get("additions").asInt(0));
+        if (prNode.has("deletions")) pr.setDeletions(prNode.get("deletions").asInt(0));
+        if (prNode.has("changed_files")) pr.setChangedFiles(prNode.get("changed_files").asInt(0));
+
         pullRequestRepository.save(pr);
     }
 

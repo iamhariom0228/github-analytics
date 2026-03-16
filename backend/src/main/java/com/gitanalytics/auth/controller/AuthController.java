@@ -78,6 +78,21 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
+    @DeleteMapping("/account")
+    public ResponseEntity<ApiResponse<Void>> deleteAccount(
+            @AuthenticationPrincipal UserDetails principal,
+            HttpServletResponse response) {
+        UUID userId = UUID.fromString(principal.getUsername());
+        userRepository.deleteById(userId);
+        // Clear JWT cookie
+        Cookie cookie = new Cookie("jwt", "");
+        cookie.setMaxAge(0);
+        cookie.setPath("/");
+        cookie.setHttpOnly(true);
+        response.addCookie(cookie);
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
+
     @GetMapping("/me")
     public ResponseEntity<ApiResponse<UserProfileDto>> me(@AuthenticationPrincipal UserDetails principal) {
         UUID userId = UUID.fromString(principal.getUsername());

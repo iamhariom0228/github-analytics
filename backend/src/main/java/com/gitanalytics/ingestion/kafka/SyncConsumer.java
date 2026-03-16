@@ -110,6 +110,12 @@ public class SyncConsumer {
             String authorLogin = dto.getAuthor() != null ? dto.getAuthor().getLogin() : null;
             Long authorGithubId = dto.getAuthor() != null ? dto.getAuthor().getId() : null;
 
+            // Try committer as fallback (GitHub resolves committer separately from author)
+            if (authorLogin == null && dto.getCommitter() != null) {
+                authorLogin = dto.getCommitter().getLogin();
+                authorGithubId = dto.getCommitter().getId();
+            }
+
             GitHubApiClient.GitHubCommitDetailDto detail =
                 gitHubApiClient.getCommitDetail(token, userId, repo.getOwner(), repo.getName(), dto.getSha());
             if (detail != null) {
@@ -117,14 +123,16 @@ public class SyncConsumer {
                     additions = detail.getStats().getAdditions();
                     deletions = detail.getStats().getDeletions();
                 }
-                // Fall back to detail's author if list response had null author
+                // Fall back to detail's author/committer if still null
                 if (authorLogin == null && detail.getAuthor() != null) {
                     authorLogin = detail.getAuthor().getLogin();
                     authorGithubId = detail.getAuthor().getId();
                 }
+                if (authorLogin == null && detail.getCommitter() != null) {
+                    authorLogin = detail.getCommitter().getLogin();
+                    authorGithubId = detail.getCommitter().getId();
+                }
             }
-            // If GitHub still can't resolve the author (email mismatch), store null.
-            // Incorrectly attributing to the repo owner would be wrong for team repos.
 
             Commit commit = Commit.builder()
                 .repo(repo)
@@ -168,6 +176,17 @@ public class SyncConsumer {
             pr.setAdditions(dto.getAdditions());
             pr.setDeletions(dto.getDeletions());
             pr.setChangedFiles(dto.getChangedFiles());
+
+            // If changedFiles is 0 (list API doesn't return file stats), fetch individual PR
+            if (dto.getChangedFiles() == 0) {
+                GitHubApiClient.GitHubPRDetailDto detail =
+                    gitHubApiClient.getPullRequestDetail(token, userId, repo.getOwner(), repo.getName(), dto.getNumber());
+                if (detail != null) {
+                    pr.setAdditions(detail.getAdditions() != null ? detail.getAdditions() : 0);
+                    pr.setDeletions(detail.getDeletions() != null ? detail.getDeletions() : 0);
+                    pr.setChangedFiles(detail.getChangedFiles() != null ? detail.getChangedFiles() : 0);
+                }
+            }
 
             PullRequest savedPr = pullRequestRepository.save(pr);
             count.incrementAndGet();

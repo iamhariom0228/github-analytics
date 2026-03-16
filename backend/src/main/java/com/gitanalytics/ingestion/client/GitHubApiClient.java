@@ -98,6 +98,33 @@ public class GitHubApiClient {
         return all;
     }
 
+    public GitHubPRDetailDto getPullRequestDetail(String accessToken, UUID userId,
+                                                   String owner, String repo, int prNumber) {
+        checkRateLimit(userId);
+        try {
+            return webClientBuilder.build()
+                .get()
+                .uri(GITHUB_API_BASE + "/repos/" + owner + "/" + repo + "/pulls/" + prNumber)
+                .header("Authorization", "Bearer " + accessToken)
+                .header("Accept", "application/vnd.github+json")
+                .exchangeToMono(resp -> {
+                    String remaining = resp.headers().asHttpHeaders().getFirst("X-RateLimit-Remaining");
+                    if (remaining != null) {
+                        redisTemplate.opsForValue().set("ga:ratelimit:gh:" + userId, remaining, 1, TimeUnit.HOURS);
+                    }
+                    return resp.bodyToMono(GitHubPRDetailDto.class);
+                })
+                .onErrorResume(WebClientResponseException.class, e -> {
+                    log.warn("Failed to get PR detail #{}: {}", prNumber, e.getStatusCode());
+                    return Mono.empty();
+                })
+                .block();
+        } catch (Exception e) {
+            log.warn("Could not fetch PR detail #{}: {}", prNumber, e.getMessage());
+            return null;
+        }
+    }
+
     public GitHubCommitDetailDto getCommitDetail(String accessToken, UUID userId,
                                                   String owner, String repo, String sha) {
         checkRateLimit(userId);
@@ -225,6 +252,7 @@ public class GitHubApiClient {
         private String sha;
         private CommitDetail commit;
         private AuthorDto author;
+        private AuthorDto committer;
 
         @Data
         public static class CommitDetail {
@@ -250,6 +278,7 @@ public class GitHubApiClient {
         private String sha;
         private CommitDetail commit;
         private AuthorDto author;
+        private AuthorDto committer;
         private StatsDto stats;
 
         @Data
@@ -300,6 +329,15 @@ public class GitHubApiClient {
             private Long id;
             private String login;
         }
+    }
+
+    @Data
+    public static class GitHubPRDetailDto {
+        private Integer number;
+        private Integer additions;
+        private Integer deletions;
+        @JsonProperty("changed_files")
+        private Integer changedFiles;
     }
 
     @Data

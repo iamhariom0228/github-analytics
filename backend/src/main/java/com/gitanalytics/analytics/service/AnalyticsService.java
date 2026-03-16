@@ -249,7 +249,7 @@ public class AnalyticsService {
             WITH daily AS (
               SELECT DISTINCT DATE(c.committed_at AT TIME ZONE :tz) AS day
               FROM commits c JOIN tracked_repos r ON c.repo_id = r.id
-              WHERE r.user_id = :userId AND c.author_login = :login
+              WHERE r.user_id = :userId AND (c.author_login = :login OR (c.author_login IS NULL AND r.owner = :login))
             ),
             gaps AS (
               SELECT day, LAG(day) OVER (ORDER BY day) AS prev_day FROM daily
@@ -321,7 +321,7 @@ public class AnalyticsService {
                        CAST(EXTRACT(HOUR FROM c.committed_at AT TIME ZONE :tz) AS int) AS hour,
                        COUNT(*) AS cnt
                 FROM commits c JOIN tracked_repos r ON c.repo_id = r.id
-                WHERE r.user_id = :userId AND c.author_login = :login
+                WHERE r.user_id = :userId AND (c.author_login = :login OR (c.author_login IS NULL AND r.owner = :login))
                 GROUP BY day, hour ORDER BY cnt DESC LIMIT 1
                 """)
                 .setParameter("userId", userId).setParameter("login", login).setParameter("tz", tz)
@@ -346,7 +346,7 @@ public class AnalyticsService {
                   COUNT(*) FILTER (WHERE CAST(EXTRACT(DOW FROM c.committed_at AT TIME ZONE :tz) AS int) BETWEEN 1 AND 5),
                   COUNT(*) FILTER (WHERE CAST(EXTRACT(DOW FROM c.committed_at AT TIME ZONE :tz) AS int) IN (0,6))
                 FROM commits c JOIN tracked_repos r ON c.repo_id = r.id
-                WHERE r.user_id = :userId AND c.author_login = :login
+                WHERE r.user_id = :userId AND (c.author_login = :login OR (c.author_login IS NULL AND r.owner = :login))
                 """)
                 .setParameter("userId", userId).setParameter("login", login).setParameter("tz", tz)
                 .getSingleResult();
@@ -381,7 +381,7 @@ public class AnalyticsService {
                   COUNT(*) FILTER (WHERE c.committed_at BETWEEN :from AND :to),
                   COUNT(*) FILTER (WHERE c.committed_at BETWEEN :prevFrom AND :prevTo)
                 FROM commits c JOIN tracked_repos r ON c.repo_id = r.id
-                WHERE r.user_id = :userId AND c.author_login = :login
+                WHERE r.user_id = :userId AND (c.author_login = :login OR (c.author_login IS NULL AND r.owner = :login))
                 """)
                 .setParameter("userId", userId).setParameter("login", login)
                 .setParameter("from", effectiveFrom).setParameter("to", effectiveTo)
@@ -446,9 +446,9 @@ public class AnalyticsService {
         // 5. PR merge time — use selected window
         try {
             Object raw = em.createNativeQuery("""
-                SELECT AVG(EXTRACT(EPOCH FROM (merged_at - created_at))/3600)
+                SELECT AVG(EXTRACT(EPOCH FROM (pr.merged_at - pr.created_at))/3600)
                 FROM pull_requests pr JOIN tracked_repos r ON pr.repo_id = r.id
-                WHERE r.user_id = :userId AND pr.author_login = :login
+                WHERE r.user_id = :userId AND (pr.author_login = :login OR (pr.author_login IS NULL AND r.owner = :login))
                   AND pr.merged_at IS NOT NULL
                   AND pr.created_at BETWEEN :from AND :to
                 """)
@@ -525,7 +525,7 @@ public class AnalyticsService {
             try {
                 Object totalRaw = em.createNativeQuery("""
                     SELECT COUNT(*) FROM commits c JOIN tracked_repos r ON c.repo_id = r.id
-                    WHERE r.user_id = :userId AND c.author_login = :login
+                    WHERE r.user_id = :userId AND (c.author_login = :login OR (c.author_login IS NULL AND r.owner = :login))
                     """)
                     .setParameter("userId", userId).setParameter("login", login)
                     .getSingleResult();
@@ -757,7 +757,7 @@ public class AnalyticsService {
         String truncFn = "week".equalsIgnoreCase(granularity) ? "week" : "day";
         String sql = "SELECT DATE_TRUNC('" + truncFn + "', c.committed_at) AS period, COUNT(*) AS cnt " +
                      "FROM commits c JOIN tracked_repos r ON c.repo_id = r.id " +
-                     "WHERE r.user_id = :userId AND c.author_login = :login " +
+                     "WHERE r.user_id = :userId AND (c.author_login = :login OR (c.author_login IS NULL AND r.owner = :login)) " +
                      "AND c.committed_at BETWEEN :from AND :to " +
                      "GROUP BY period ORDER BY period ASC";
         List<Object[]> rows = em.createNativeQuery(sql)
@@ -787,7 +787,7 @@ public class AnalyticsService {
         long commits = countCommits(userId, login, from, to);
 
         String prSql = "SELECT COUNT(*) FROM pull_requests pr JOIN tracked_repos r ON pr.repo_id = r.id " +
-                       "WHERE r.user_id = :userId AND pr.author_login = :login AND pr.created_at BETWEEN :from AND :to";
+                       "WHERE r.user_id = :userId AND (pr.author_login = :login OR (pr.author_login IS NULL AND r.owner = :login)) AND pr.created_at BETWEEN :from AND :to";
         long prsAuthored = ((Number) em.createNativeQuery(prSql)
             .setParameter("userId", userId).setParameter("login", login)
             .setParameter("from", from).setParameter("to", to)
@@ -805,7 +805,8 @@ public class AnalyticsService {
 
         String addSql = "SELECT COALESCE(SUM(c.additions), 0), COALESCE(SUM(c.deletions), 0) " +
                         "FROM commits c JOIN tracked_repos r ON c.repo_id = r.id " +
-                        "WHERE r.user_id = :userId AND c.author_login = :login " +
+                        "WHERE r.user_id = :userId " +
+                        "AND (c.author_login = :login OR (c.author_login IS NULL AND r.owner = :login)) " +
                         "AND c.committed_at BETWEEN :from AND :to";
         Object[] addRow = (Object[]) em.createNativeQuery(addSql)
             .setParameter("userId", userId).setParameter("login", login)
@@ -863,7 +864,8 @@ public class AnalyticsService {
 
     private long countCommits(UUID userId, String login, OffsetDateTime from, OffsetDateTime to) {
         String sql = "SELECT COUNT(*) FROM commits c JOIN tracked_repos r ON c.repo_id = r.id " +
-                     "WHERE r.user_id = :userId AND c.author_login = :login " +
+                     "WHERE r.user_id = :userId " +
+                     "AND (c.author_login = :login OR (c.author_login IS NULL AND r.owner = :login)) " +
                      "AND c.committed_at BETWEEN :from AND :to";
         return ((Number) em.createNativeQuery(sql)
             .setParameter("userId", userId)

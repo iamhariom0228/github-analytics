@@ -1,17 +1,20 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   getDigestPreferences,
   updateDigestPreferences,
   sendDigestPreview,
+  deleteAccount,
 } from "@/lib/api/client";
 import type { DigestPreferences } from "@/types";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 export default function SettingsPage() {
+  const router = useRouter();
   const qc = useQueryClient();
   const { data: prefs } = useQuery({
     queryKey: ["digest-prefs"],
@@ -125,6 +128,32 @@ export default function SettingsPage() {
         {updateMutation.isSuccess && (
           <p className="text-green-600 text-sm">Preferences saved.</p>
         )}
+      </div>
+
+      {/* Danger Zone */}
+      <div className="bg-card border border-destructive/50 rounded-xl p-6 space-y-4">
+        <h2 className="font-semibold text-destructive">Danger Zone</h2>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-sm font-medium">Disconnect GitHub Account</div>
+            <div className="text-xs text-muted-foreground">
+              Permanently deletes your account and all associated data. This cannot be undone.
+            </div>
+          </div>
+          <button
+            onClick={async () => {
+              const confirmed = window.confirm(
+                "Are you sure? This will delete all your data and cannot be undone."
+              );
+              if (!confirmed) return;
+              await deleteAccount();
+              window.location.href = "/";
+            }}
+            className="bg-destructive text-destructive-foreground px-4 py-2 rounded-md text-sm font-medium hover:bg-destructive/90"
+          >
+            Disconnect Account
+          </button>
+        </div>
       </div>
     </div>
   );

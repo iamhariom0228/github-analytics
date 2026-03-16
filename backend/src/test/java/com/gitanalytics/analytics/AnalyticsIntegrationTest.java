@@ -140,7 +140,9 @@ class AnalyticsIntegrationTest {
     @Test
     @Order(2)
     void getCommitHeatmap_returnsCorrectDayHourCounts() {
-        List<HeatmapCellDto> heatmap = analyticsService.getCommitHeatmap(userId, null, "UTC");
+        OffsetDateTime from = OffsetDateTime.now().minusDays(90);
+        OffsetDateTime to = OffsetDateTime.now();
+        List<HeatmapCellDto> heatmap = analyticsService.getCommitHeatmap(userId, null, "UTC", from, to);
 
         assertThat(heatmap).isNotEmpty();
         // Should have entries for the hours we seeded
@@ -151,7 +153,9 @@ class AnalyticsIntegrationTest {
     @Test
     @Order(3)
     void getCommitHeatmap_withRepoFilter_filtersCorrectly() {
-        List<HeatmapCellDto> heatmap = analyticsService.getCommitHeatmap(userId, repoId.toString(), "UTC");
+        OffsetDateTime from = OffsetDateTime.now().minusDays(90);
+        OffsetDateTime to = OffsetDateTime.now();
+        List<HeatmapCellDto> heatmap = analyticsService.getCommitHeatmap(userId, repoId.toString(), "UTC", from, to);
         assertThat(heatmap).isNotEmpty();
     }
 

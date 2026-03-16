@@ -167,3 +167,6 @@ export const updateDigestPreferences = (prefs: DigestPreferences) =>
 
 export const sendDigestPreview = () =>
   apiClient.post<ApiResponse<void>>("/digest/preview").then(unwrap);
+
+export const deleteAccount = () =>
+  apiClient.delete<ApiResponse<void>>("/auth/account").then(unwrap);
