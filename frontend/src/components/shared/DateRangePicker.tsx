@@ -1,6 +1,7 @@
 "use client";
 
-import { subDays, subMonths, subYears, formatISO, parseISO } from "date-fns";
+import { subDays, subMonths, subYears, formatISO } from "date-fns";
+import { useMemo } from "react";
 
 const PRESETS = [
   { label: "7d",  getDays: () => subDays(new Date(), 7) },
@@ -45,9 +46,11 @@ export function DateRangePicker({ value, onChange }: Props) {
 }
 
 export function usePresetDates(preset: DatePreset): { from: string; to: string } {
-  const p = PRESETS.find((x) => x.label === preset)!;
-  return {
-    from: formatISO(p.getDays()),
-    to: formatISO(new Date()),
-  };
+  return useMemo(() => {
+    const p = PRESETS.find((x) => x.label === preset)!;
+    return {
+      from: formatISO(p.getDays()),
+      to: formatISO(new Date()),
+    };
+  }, [preset]);
 }

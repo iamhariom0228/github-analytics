@@ -72,16 +72,22 @@ export default function AnalyticsPage() {
     ? Object.entries(sizeData.buckets).map(([key, count]) => ({ name: key, count }))
     : [];
 
-  const trendChartData = (trend ?? []).map((p) => ({
-    date: new Date(p.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-    commits: p.count,
-  }));
+  const trendChartData = (trend ?? []).map((p) => {
+    const d = new Date(p.date);
+    return {
+      date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      fullDate: d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      commits: p.count,
+    };
+  });
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Analytics</h1>
-        <DateRangePicker value={preset} onChange={(p) => setPreset(p)} />
+        <div className="flex items-center gap-2">
+          <DateRangePicker value={preset} onChange={(p) => setPreset(p)} />
+        </div>
       </div>
 
       {/* Overview stats row */}
@@ -147,7 +153,10 @@ export default function AnalyticsPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="date" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
                   <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} allowDecimals={false} />
-                  <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
+                  <Tooltip
+                    contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }}
+                    labelFormatter={(_, payload) => payload?.[0]?.payload?.fullDate ?? ""}
+                  />
                   <Area type="monotone" dataKey="commits" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#commitGradient)" />
                 </AreaChart>
               </ResponsiveContainer>

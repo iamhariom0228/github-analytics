@@ -229,7 +229,124 @@ public class GitHubApiClient {
         }
     }
 
+    @SuppressWarnings("unchecked")
+    public List<GraphQLCommitDto> getCommitsWithStats(String accessToken, UUID userId,
+                                                       String owner, String repo,
+                                                       OffsetDateTime since) {
+        List<GraphQLCommitDto> all = new ArrayList<>();
+        String cursor = null;
+
+        while (true) {
+            StringBuilder args = new StringBuilder("first: 100");
+            if (since != null) args.append(", since: \"").append(since).append("\"");
+            if (cursor != null) args.append(", after: \"").append(cursor).append("\"");
+
+            String query = String.format(
+                "{ repository(owner: \"%s\", name: \"%s\") { defaultBranchRef { target { " +
+                "... on Commit { history(%s) { pageInfo { hasNextPage endCursor } " +
+                "nodes { oid additions deletions committedDate message " +
+                "author { email user { login databaseId } } " +
+                "committer { user { login databaseId } } } } } } } } }",
+                owner, repo, args);
+
+            checkRateLimit(userId);
+            try {
+                Map<String, Object> response = webClientBuilder.build()
+                    .post()
+                    .uri(GITHUB_API_BASE + "/graphql")
+                    .header("Authorization", "Bearer " + accessToken)
+                    .header("Accept", "application/vnd.github+json")
+                    .bodyValue(Map.of("query", query))
+                    .exchangeToMono(resp -> {
+                        String remaining = resp.headers().asHttpHeaders().getFirst("X-RateLimit-Remaining");
+                        if (remaining != null) {
+                            redisTemplate.opsForValue().set("ga:ratelimit:gh:" + userId, remaining, 1, TimeUnit.HOURS);
+                        }
+                        return resp.bodyToMono(Map.class);
+                    })
+                    .onErrorResume(WebClientResponseException.class, e -> {
+                        log.error("GraphQL error: {}", e.getStatusCode());
+                        return Mono.error(new GitHubApiException("GraphQL returned " + e.getStatusCode()));
+                    })
+                    .block();
+
+                if (response == null) break;
+
+                Map<String, Object> data = (Map<String, Object>) response.get("data");
+                if (data == null) break;
+                Map<String, Object> repository = (Map<String, Object>) data.get("repository");
+                if (repository == null) break;
+                Map<String, Object> defaultBranchRef = (Map<String, Object>) repository.get("defaultBranchRef");
+                if (defaultBranchRef == null) break;
+                Map<String, Object> target = (Map<String, Object>) defaultBranchRef.get("target");
+                if (target == null) break;
+                Map<String, Object> history = (Map<String, Object>) target.get("history");
+                if (history == null) break;
+
+                Map<String, Object> pageInfo = (Map<String, Object>) history.get("pageInfo");
+                boolean hasNextPage = Boolean.TRUE.equals(pageInfo.get("hasNextPage"));
+                cursor = (String) pageInfo.get("endCursor");
+
+                List<Map<String, Object>> nodes = (List<Map<String, Object>>) history.get("nodes");
+                if (nodes == null || nodes.isEmpty()) break;
+
+                for (Map<String, Object> node : nodes) {
+                    GraphQLCommitDto dto = new GraphQLCommitDto();
+                    dto.setSha((String) node.get("oid"));
+                    dto.setAdditions(((Number) node.getOrDefault("additions", 0)).intValue());
+                    dto.setDeletions(((Number) node.getOrDefault("deletions", 0)).intValue());
+                    dto.setMessage((String) node.get("message"));
+                    String dateStr = (String) node.get("committedDate");
+                    if (dateStr != null) dto.setCommittedDate(OffsetDateTime.parse(dateStr));
+
+                    Map<String, Object> author = (Map<String, Object>) node.get("author");
+                    if (author != null) {
+                        dto.setAuthorEmail((String) author.get("email"));
+                        Map<String, Object> authorUser = (Map<String, Object>) author.get("user");
+                        if (authorUser != null) {
+                            dto.setAuthorLogin((String) authorUser.get("login"));
+                            Object dbId = authorUser.get("databaseId");
+                            if (dbId != null) dto.setAuthorGithubId(((Number) dbId).longValue());
+                        }
+                    }
+                    Map<String, Object> committer = (Map<String, Object>) node.get("committer");
+                    if (committer != null) {
+                        Map<String, Object> committerUser = (Map<String, Object>) committer.get("user");
+                        if (committerUser != null) {
+                            dto.setCommitterLogin((String) committerUser.get("login"));
+                            Object dbId = committerUser.get("databaseId");
+                            if (dbId != null) dto.setCommitterGithubId(((Number) dbId).longValue());
+                        }
+                    }
+                    all.add(dto);
+                }
+
+                if (!hasNextPage) break;
+            } catch (GitHubApiException e) {
+                throw e;
+            } catch (Exception e) {
+                log.error("GraphQL commit fetch failed for {}/{}: {}", owner, repo, e.getMessage());
+                break;
+            }
+        }
+        return all;
+    }
+
     // --- DTOs ---
+
+    @Data
+    public static class GraphQLCommitDto {
+        private String sha;
+        private int additions;
+        private int deletions;
+        private OffsetDateTime committedDate;
+        private String message;
+        private String authorLogin;
+        private Long authorGithubId;
+        private String authorEmail;
+        private String committerLogin;
+        private Long committerGithubId;
+    }
 
     @Data
     public static class GitHubRepoDto {
@@ -352,5 +469,101 @@ public class GitHubApiClient {
         public static class UserDto {
             private String login;
         }
+    }
+
+    @Data
+    public static class GitHubReleaseDto {
+        @JsonProperty("tag_name")
+        private String tagName;
+        private String name;
+        @JsonProperty("published_at")
+        private OffsetDateTime publishedAt;
+        private Boolean draft;
+        private Boolean prerelease;
+    }
+
+    @Data
+    public static class GitHubRepoMetaDto {
+        @JsonProperty("stargazers_count")
+        private Integer stargazersCount;
+        @JsonProperty("forks_count")
+        private Integer forksCount;
+        @JsonProperty("watchers_count")
+        private Integer watchersCount;
+        @JsonProperty("open_issues_count")
+        private Integer openIssuesCount;
+        private String language;
+        private String description;
+    }
+
+    public GitHubRepoMetaDto getRepoMeta(String accessToken, UUID userId, String owner, String repo) {
+        try {
+            return webClientBuilder.build()
+                .get()
+                .uri("https://api.github.com/repos/{owner}/{repo}", owner, repo)
+                .header("Authorization", "Bearer " + accessToken)
+                .header("Accept", "application/vnd.github+json")
+                .retrieve()
+                .bodyToMono(GitHubRepoMetaDto.class)
+                .block();
+        } catch (Exception e) {
+            log.warn("Failed to fetch repo meta for {}/{}: {}", owner, repo, e.getMessage());
+            return null;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public String forkRepo(String accessToken, UUID userId, String owner, String repo) {
+        checkRateLimit(userId);
+        try {
+            Map<String, Object> result = webClientBuilder.build()
+                .post()
+                .uri(GITHUB_API_BASE + "/repos/" + owner + "/" + repo + "/forks")
+                .header("Authorization", "Bearer " + accessToken)
+                .header("Accept", "application/vnd.github+json")
+                .bodyValue(Map.of())
+                .retrieve()
+                .bodyToMono(Map.class)
+                .onErrorResume(WebClientResponseException.class, e -> {
+                    log.error("Failed to fork {}/{}: {}", owner, repo, e.getStatusCode());
+                    return Mono.error(new GitHubApiException("Fork failed: " + e.getStatusCode()));
+                })
+                .block();
+            return result != null ? (String) result.get("html_url") : null;
+        } catch (GitHubApiException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new GitHubApiException("Fork failed: " + e.getMessage(), e);
+        }
+    }
+
+    @SuppressWarnings({"unchecked","rawtypes"})
+    public List<GitHubReleaseDto> getReleases(String accessToken, UUID userId, String owner, String repo) {
+        List<GitHubReleaseDto> all = new ArrayList<>();
+        int page = 1;
+        while (true) {
+            try {
+                List raw = webClientBuilder.build()
+                    .get()
+                    .uri("https://api.github.com/repos/{owner}/{repo}/releases?per_page=100&page={page}", owner, repo, page)
+                    .header("Authorization", "Bearer " + accessToken)
+                    .header("Accept", "application/vnd.github+json")
+                    .retrieve()
+                    .bodyToMono(List.class)
+                    .block();
+                if (raw == null || raw.isEmpty()) break;
+                List<GitHubReleaseDto> page_results = ((List<?>) raw).stream()
+                    .map(item -> objectMapper.convertValue(item, GitHubReleaseDto.class))
+                    .filter(r -> !Boolean.TRUE.equals(r.getDraft()) && !Boolean.TRUE.equals(r.getPrerelease()))
+                    .collect(java.util.stream.Collectors.toList());
+                all.addAll(page_results);
+                if (raw.size() < 100) break;
+                page++;
+            } catch (Exception e) {
+                log.warn("Failed to fetch releases page {} for {}/{}: {}", page, owner, repo, e.getMessage());
+                break;
+            }
+        }
+        return all;
     }
 }

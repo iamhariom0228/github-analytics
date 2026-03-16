@@ -17,7 +17,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -31,6 +33,7 @@ public class SyncConsumer {
     private final PullRequestRepository pullRequestRepository;
     private final PrReviewRepository prReviewRepository;
     private final SyncJobRepository syncJobRepository;
+    private final ReleaseRepository releaseRepository;
     private final UserRepository userRepository;
     private final GitHubApiClient gitHubApiClient;
     private final GitHubOAuthService gitHubOAuthService;
@@ -38,7 +41,6 @@ public class SyncConsumer {
     private final RedisTemplate<String, Object> redisTemplate;
 
     @KafkaListener(topics = "ga.sync.requested", groupId = "github-analytics")
-    @Transactional
     public void handleSyncRequested(SyncRequestedEvent event) {
         log.info("Processing sync: jobId={}, repoId={}, type={}", event.getSyncJobId(), event.getRepoId(), event.getSyncType());
 
@@ -67,8 +69,10 @@ public class SyncConsumer {
             OffsetDateTime since = "FULL_SYNC".equals(event.getSyncType()) ? null : repo.getLastSyncedAt();
             AtomicInteger count = new AtomicInteger(0);
 
-            syncCommits(repo, accessToken, user.getId(), since, count);
+            syncCommits(repo, accessToken, user, since, count);
             syncPullRequests(repo, accessToken, user.getId(), since, count);
+            syncRepoMeta(repo, accessToken, user.getId());
+            syncReleases(repo, accessToken, user.getId(), count);
 
             repo.setSyncStatus(TrackedRepo.SyncStatus.DONE);
             repo.setLastSyncedAt(OffsetDateTime.now());
@@ -97,41 +101,38 @@ public class SyncConsumer {
         }
     }
 
-    private void syncCommits(TrackedRepo repo, String token, UUID userId,
+    private void syncCommits(TrackedRepo repo, String token, User user,
                               OffsetDateTime since, AtomicInteger count) {
-        List<GitHubApiClient.GitHubCommitDto> commits = gitHubApiClient.getCommits(
-            token, userId, repo.getOwner(), repo.getName(), since);
+        // GraphQL: fetch 100 commits per request with additions/deletions + author email — no N+1
+        List<GitHubApiClient.GraphQLCommitDto> commits = gitHubApiClient.getCommitsWithStats(
+            token, user.getId(), repo.getOwner(), repo.getName(), since);
 
-        for (GitHubApiClient.GitHubCommitDto dto : commits) {
-            if (dto.getCommit() == null || dto.getCommit().getAuthor() == null) continue;
+        // Build email set for author resolution when GitHub user link is missing
+        Set<String> knownEmails = new HashSet<>();
+        if (user.getEmail() != null) knownEmails.add(user.getEmail().trim());
 
-            // Fetch individual commit for stats (additions/deletions)
-            int additions = 0, deletions = 0;
-            String authorLogin = dto.getAuthor() != null ? dto.getAuthor().getLogin() : null;
-            Long authorGithubId = dto.getAuthor() != null ? dto.getAuthor().getId() : null;
+        for (GitHubApiClient.GraphQLCommitDto dto : commits) {
+            if (dto.getCommittedDate() == null) continue;
 
-            // Try committer as fallback (GitHub resolves committer separately from author)
-            if (authorLogin == null && dto.getCommitter() != null) {
-                authorLogin = dto.getCommitter().getLogin();
-                authorGithubId = dto.getCommitter().getId();
+            String authorLogin = dto.getAuthorLogin();
+            Long authorGithubId = dto.getAuthorGithubId();
+
+            // Email-based resolution: if GitHub didn't link the commit to a user account,
+            // check if the commit email matches any of the user's known emails
+            if (authorLogin == null && dto.getAuthorEmail() != null) {
+                String email = dto.getAuthorEmail().trim().toLowerCase();
+                boolean isOwner = knownEmails.stream()
+                    .anyMatch(e -> e.toLowerCase().equals(email));
+                if (isOwner) {
+                    authorLogin = user.getUsername();
+                    authorGithubId = user.getGithubId();
+                }
             }
 
-            GitHubApiClient.GitHubCommitDetailDto detail =
-                gitHubApiClient.getCommitDetail(token, userId, repo.getOwner(), repo.getName(), dto.getSha());
-            if (detail != null) {
-                if (detail.getStats() != null) {
-                    additions = detail.getStats().getAdditions();
-                    deletions = detail.getStats().getDeletions();
-                }
-                // Fall back to detail's author/committer if still null
-                if (authorLogin == null && detail.getAuthor() != null) {
-                    authorLogin = detail.getAuthor().getLogin();
-                    authorGithubId = detail.getAuthor().getId();
-                }
-                if (authorLogin == null && detail.getCommitter() != null) {
-                    authorLogin = detail.getCommitter().getLogin();
-                    authorGithubId = detail.getCommitter().getId();
-                }
+            // Fallback to committer
+            if (authorLogin == null) {
+                authorLogin = dto.getCommitterLogin();
+                authorGithubId = dto.getCommitterGithubId();
             }
 
             Commit commit = Commit.builder()
@@ -139,10 +140,10 @@ public class SyncConsumer {
                 .sha(dto.getSha())
                 .authorLogin(authorLogin)
                 .authorGithubId(authorGithubId)
-                .messageSummary(firstLine(dto.getCommit().getMessage()))
-                .additions(additions)
-                .deletions(deletions)
-                .committedAt(dto.getCommit().getAuthor().getDate())
+                .messageSummary(firstLine(dto.getMessage()))
+                .additions(dto.getAdditions())
+                .deletions(dto.getDeletions())
+                .committedAt(dto.getCommittedDate())
                 .build();
             try {
                 commitRepository.upsert(commit);
@@ -227,6 +228,37 @@ public class SyncConsumer {
             }
         } catch (GitHubApiException e) {
             log.warn("Failed to sync reviews for PR #{}: {}", pr.getPrNumber(), e.getMessage());
+        }
+    }
+
+    private void syncRepoMeta(TrackedRepo repo, String token, UUID userId) {
+        GitHubApiClient.GitHubRepoMetaDto meta = gitHubApiClient.getRepoMeta(token, userId, repo.getOwner(), repo.getName());
+        if (meta != null) {
+            repo.setStars(meta.getStargazersCount() != null ? meta.getStargazersCount() : 0);
+            repo.setForks(meta.getForksCount() != null ? meta.getForksCount() : 0);
+            repo.setWatchers(meta.getWatchersCount() != null ? meta.getWatchersCount() : 0);
+            repo.setOpenIssuesCount(meta.getOpenIssuesCount() != null ? meta.getOpenIssuesCount() : 0);
+            repo.setLanguage(meta.getLanguage());
+            repo.setDescription(meta.getDescription());
+            trackedRepoRepository.save(repo);
+        }
+    }
+
+    private void syncReleases(TrackedRepo repo, String token, UUID userId, AtomicInteger count) {
+        List<GitHubApiClient.GitHubReleaseDto> releases = gitHubApiClient.getReleases(token, userId, repo.getOwner(), repo.getName());
+        for (GitHubApiClient.GitHubReleaseDto dto : releases) {
+            if (dto.getTagName() == null) continue;
+            Release release = Release.builder()
+                .repo(repo)
+                .tagName(dto.getTagName())
+                .name(dto.getName())
+                .publishedAt(dto.getPublishedAt())
+                .build();
+            try {
+                releaseRepository.upsert(release);
+            } catch (Exception e) {
+                log.debug("Failed to upsert release {}: {}", dto.getTagName(), e.getMessage());
+            }
         }
     }
 

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRepos, useAddRepo, useDeleteRepo, useTriggerSync, useRepoSuggestions } from "@/hooks/useRepos";
 import { useRepoHealth } from "@/hooks/useAnalytics";
 import { cn } from "@/lib/utils";
-import { RefreshCw, Trash2, Plus, Search, ShieldCheck, ShieldAlert, ShieldX, ChevronDown, ChevronUp } from "lucide-react";
+import { RefreshCw, Trash2, Plus, Search, ShieldCheck, ShieldAlert, ShieldX, ChevronDown, ChevronUp, Star, GitFork } from "lucide-react";
 import type { GitHubRepoSuggestion, RepoHealth } from "@/types";
 
 const statusColor: Record<string, string> = {
@@ -123,6 +123,9 @@ export default function ReposPage() {
             <div key={repo.id} className="bg-card border border-border rounded-xl p-4 flex items-center justify-between gap-4">
               <div className="min-w-0 flex-1">
                 <div className="font-medium truncate">{repo.fullName}</div>
+                {repo.description && (
+                  <div className="text-xs text-muted-foreground truncate mt-0.5">{repo.description}</div>
+                )}
                 <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                   <span className={cn("text-xs px-2 py-0.5 rounded font-medium", statusColor[repo.syncStatus])}>
                     {repo.syncStatus}
@@ -141,6 +144,26 @@ export default function ReposPage() {
                     expanded={expandedHealthId === repo.id}
                     onToggle={() => setExpandedHealthId(expandedHealthId === repo.id ? null : repo.id)}
                   />
+                </div>
+                <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                  {repo.language && (
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-400 inline-block" />
+                      {repo.language}
+                    </span>
+                  )}
+                  {(repo.stars ?? 0) > 0 && (
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <Star className="w-3 h-3" />
+                      {repo.stars!.toLocaleString()}
+                    </span>
+                  )}
+                  {(repo.forks ?? 0) > 0 && (
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <GitFork className="w-3 h-3" />
+                      {repo.forks!.toLocaleString()}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">

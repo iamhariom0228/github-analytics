@@ -12,12 +12,14 @@ import {
   LogOut,
   Sun,
   Moon,
+  Compass,
 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import { logout } from "@/lib/api/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect, useState } from "react";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -25,6 +27,7 @@ const navItems = [
   { href: "/analytics", icon: BarChart2, label: "Analytics" },
   { href: "/team", icon: Users, label: "Team" },
   { href: "/settings", icon: Settings, label: "Settings" },
+  { href: "/explore", icon: Compass, label: "Explore" },
 ];
 
 export function Sidebar() {
@@ -34,6 +37,7 @@ export function Sidebar() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+  useKeyboardShortcuts();
 
   const logoutMutation = useMutation({
     mutationFn: logout,

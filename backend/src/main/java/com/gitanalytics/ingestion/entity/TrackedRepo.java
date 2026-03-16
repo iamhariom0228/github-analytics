@@ -49,6 +49,14 @@ public class TrackedRepo {
     @Column(name = "webhook_id")
     private Long webhookId;
 
+    private Integer stars;
+    private Integer forks;
+    private Integer watchers;
+    @Column(name = "open_issues_count")
+    private Integer openIssuesCount;
+    private String language;
+    private String description;
+
     @Column(name = "created_at", updatable = false)
     private OffsetDateTime createdAt;
 

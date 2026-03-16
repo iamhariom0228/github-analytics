@@ -16,13 +16,17 @@ import com.gitanalytics.shared.config.AppProperties;
 import com.gitanalytics.shared.exception.ResourceNotFoundException;
 import com.gitanalytics.shared.exception.UnauthorizedException;
 import com.gitanalytics.shared.kafka.events.SyncRequestedEvent;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -39,6 +43,19 @@ public class RepoService {
     private final SyncProducer syncProducer;
     private final RedisTemplate<String, Object> redisTemplate;
     private final AppProperties appProperties;
+
+    @PostConstruct
+    public void clearStaleSyncLocks() {
+        try {
+            Set<String> keys = redisTemplate.keys("ga:sync:lock:*");
+            if (keys != null && !keys.isEmpty()) {
+                redisTemplate.delete(keys);
+                log.info("Cleared {} stale sync lock(s) on startup", keys.size());
+            }
+        } catch (Exception e) {
+            log.warn("Could not clear stale sync locks on startup: {}", e.getMessage());
+        }
+    }
 
     public List<RepoDto> getUserRepos(UUID userId) {
         return trackedRepoRepository.findByUserId(userId).stream()
@@ -128,6 +145,13 @@ public class RepoService {
         );
     }
 
+    public String forkRepo(UUID userId, String owner, String repo) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        String accessToken = gitHubOAuthService.decryptAccessToken(user);
+        return gitHubApiClient.forkRepo(accessToken, userId, owner, repo);
+    }
+
     public List<GitHubApiClient.GitHubRepoDto> getSuggestions(UUID userId) {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new ResourceNotFoundException("User not found"));
@@ -159,9 +183,19 @@ public class RepoService {
             .status(SyncJob.JobStatus.PENDING)
             .build());
 
-        syncProducer.publishSyncRequested(new SyncRequestedEvent(
-            job.getId(), user.getId(), repo.getId(), syncType
-        ));
+        SyncRequestedEvent event = new SyncRequestedEvent(job.getId(), user.getId(), repo.getId(), syncType);
+
+        // Publish AFTER the transaction commits so the consumer always finds the repo in DB
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    syncProducer.publishSyncRequested(event);
+                }
+            });
+        } else {
+            syncProducer.publishSyncRequested(event);
+        }
 
         return job;
     }
@@ -174,7 +208,13 @@ public class RepoService {
             repo.getFullName(),
             repo.isPrivate(),
             repo.getSyncStatus().name(),
-            repo.getLastSyncedAt()
+            repo.getLastSyncedAt(),
+            repo.getStars(),
+            repo.getForks(),
+            repo.getWatchers(),
+            repo.getOpenIssuesCount(),
+            repo.getLanguage(),
+            repo.getDescription()
         );
     }
 }

@@ -15,6 +15,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -63,6 +64,15 @@ public class RepoController {
             @PathVariable UUID id) {
         UUID userId = UUID.fromString(principal.getUsername());
         return ResponseEntity.ok(ApiResponse.ok(repoService.getSyncStatus(userId, id)));
+    }
+
+    @PostMapping("/fork")
+    public ResponseEntity<ApiResponse<Map<String, String>>> forkRepo(
+            @AuthenticationPrincipal UserDetails principal,
+            @RequestBody Map<String, String> request) {
+        UUID userId = UUID.fromString(principal.getUsername());
+        String htmlUrl = repoService.forkRepo(userId, request.get("owner"), request.get("repo"));
+        return ResponseEntity.ok(ApiResponse.ok(Map.of("htmlUrl", htmlUrl)));
     }
 
     @GetMapping("/suggestions")

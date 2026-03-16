@@ -6,24 +6,25 @@ import { useLeaderboard, useBusFactor, useStalePRs } from "@/hooks/useAnalytics"
 import { DateRangePicker, usePresetDates } from "@/components/shared/DateRangePicker";
 import type { DatePreset } from "@/components/shared/DateRangePicker";
 import { formatDistanceToNow } from "date-fns";
-import { Download, AlertTriangle } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 
 function Skeleton({ className = "" }: { className?: string }) {
   return <div className={`animate-pulse bg-muted rounded ${className}`} />;
 }
 
-function exportCSV(leaderboard: Array<{ login: string; commits: number; linesAdded: number; linesRemoved: number }>, repoName: string) {
-  const headers = ["Rank", "Contributor", "Commits", "Lines Added", "Lines Removed"];
-  const rows = leaderboard.map((c, i) => [i + 1, c.login, c.commits, c.linesAdded, c.linesRemoved]);
-  const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `leaderboard-${repoName.replace("/", "-")}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+function LeaderboardSearch({ onSearch, hidden }: { onSearch: (v: string) => void; hidden: boolean }) {
+  const [value, setValue] = useState("");
+  return (
+    <input
+      value={value}
+      onChange={(e) => { setValue(e.target.value); onSearch(e.target.value); }}
+      onKeyDown={(e) => e.stopPropagation()}
+      placeholder="Filter by contributor..."
+      className={`border border-input rounded-md px-3 py-1.5 text-sm bg-background w-48 ${hidden ? "hidden" : ""}`}
+    />
+  );
 }
+
 
 const STORAGE_KEY = "team:selectedRepoId";
 
@@ -36,11 +37,16 @@ export default function TeamPage() {
   const { from, to } = usePresetDates(preset);
 
   const repoId = selectedRepoId || repos?.[0]?.id || "";
-  const repoName = repos?.find((r) => r.id === repoId)?.fullName ?? "repo";
 
+  const [lbSearch, setLbSearch] = useState("");
   const { data: leaderboard, isLoading: lbLoading } = useLeaderboard(repoId, from, to);
+
   const { data: busFactor, isLoading: bfLoading } = useBusFactor(repoId);
   const { data: stalePRs, isLoading: staleLoading } = useStalePRs(repoId, 7);
+
+  const filteredLeaderboard = leaderboard?.filter((c) =>
+    c.login.toLowerCase().includes(lbSearch.toLowerCase())
+  ) ?? [];
 
   if (reposLoading) {
     return (
@@ -122,17 +128,11 @@ export default function TeamPage() {
 
       {/* Leaderboard */}
       <div className="bg-card border border-border rounded-xl p-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <h2 className="font-semibold">Contributor Leaderboard</h2>
-          {leaderboard && leaderboard.length > 0 && (
-            <button
-              onClick={() => exportCSV(leaderboard, repoName)}
-              className="flex items-center gap-1.5 text-xs border border-border px-3 py-1.5 rounded-md hover:bg-muted transition-colors"
-            >
-              <Download className="w-3 h-3" />
-              Export CSV
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            <LeaderboardSearch onSearch={setLbSearch} hidden={!leaderboard?.length} />
+          </div>
         </div>
         {lbLoading ? (
           <div className="space-y-2">
@@ -152,15 +152,23 @@ export default function TeamPage() {
               </tr>
             </thead>
             <tbody>
-              {leaderboard.map((c, i) => (
-                <tr key={c.login} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                  <td className="py-2.5 pr-4 text-muted-foreground">{i + 1}</td>
-                  <td className="py-2.5 pr-4 font-medium">{c.login}</td>
-                  <td className="py-2.5 pr-4 text-right">{c.commits}</td>
-                  <td className="py-2.5 pr-4 text-right text-green-600">+{c.linesAdded.toLocaleString()}</td>
-                  <td className="py-2.5 text-right text-red-500">-{c.linesRemoved.toLocaleString()}</td>
+              {filteredLeaderboard.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-4 text-center text-muted-foreground text-sm">
+                    No contributors match &quot;{lbSearch}&quot;
+                  </td>
                 </tr>
-              ))}
+              ) : (
+                filteredLeaderboard.map((c, i) => (
+                  <tr key={c.login} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+                    <td className="py-2.5 pr-4 text-muted-foreground">{i + 1}</td>
+                    <td className="py-2.5 pr-4 font-medium">{c.login}</td>
+                    <td className="py-2.5 pr-4 text-right">{c.commits}</td>
+                    <td className="py-2.5 pr-4 text-right text-green-600">+{c.linesAdded.toLocaleString()}</td>
+                    <td className="py-2.5 text-right text-red-500">-{c.linesRemoved.toLocaleString()}</td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         )}

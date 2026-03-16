@@ -21,6 +21,12 @@ export interface Repo {
   isPrivate: boolean;
   syncStatus: "PENDING" | "SYNCING" | "DONE" | "FAILED";
   lastSyncedAt: string | null;
+  stars?: number;
+  forks?: number;
+  watchers?: number;
+  openIssuesCount?: number;
+  language?: string;
+  description?: string;
 }
 
 export interface SyncStatus {

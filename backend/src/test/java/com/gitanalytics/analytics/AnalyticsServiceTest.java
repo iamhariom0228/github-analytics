@@ -36,6 +36,7 @@ class AnalyticsServiceTest {
     @Mock private CommitRepository commitRepository;
     @Mock private PullRequestRepository pullRequestRepository;
     @Mock private PrReviewRepository prReviewRepository;
+    @Mock private ReleaseRepository releaseRepository;
     @Mock private TrackedRepoRepository trackedRepoRepository;
     @Mock private RedisTemplate<String, Object> redisTemplate;
     @Mock private ValueOperations<String, Object> valueOps;
@@ -47,7 +48,7 @@ class AnalyticsServiceTest {
     void setUp() {
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
         service = new AnalyticsService(userRepository, commitRepository, pullRequestRepository,
-            prReviewRepository, trackedRepoRepository, redisTemplate, groqApiClient);
+            prReviewRepository, releaseRepository, trackedRepoRepository, redisTemplate, groqApiClient);
         // inject EntityManager via reflection (it's @PersistenceContext)
         try {
             var field = AnalyticsService.class.getDeclaredField("em");

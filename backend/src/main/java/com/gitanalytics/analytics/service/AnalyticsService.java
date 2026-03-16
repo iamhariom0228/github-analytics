@@ -7,6 +7,7 @@ import com.gitanalytics.ingestion.entity.PullRequest;
 import com.gitanalytics.ingestion.repository.CommitRepository;
 import com.gitanalytics.ingestion.repository.PullRequestRepository;
 import com.gitanalytics.ingestion.repository.PrReviewRepository;
+import com.gitanalytics.ingestion.repository.ReleaseRepository;
 import com.gitanalytics.ingestion.repository.TrackedRepoRepository;
 import com.gitanalytics.shared.client.GroqApiClient;
 import com.gitanalytics.shared.exception.ResourceNotFoundException;
@@ -34,6 +35,7 @@ public class AnalyticsService {
     private final CommitRepository commitRepository;
     private final PullRequestRepository pullRequestRepository;
     private final PrReviewRepository prReviewRepository;
+    private final ReleaseRepository releaseRepository;
     private final TrackedRepoRepository trackedRepoRepository;
     private final RedisTemplate<String, Object> redisTemplate;
     private final GroqApiClient groqApiClient;
@@ -699,8 +701,15 @@ public class AnalyticsService {
         signals.add(new RepoHealthDto.SignalDto("No stale PRs (>14d)", noStale,
             noStale ? "All clear" : stalePRs + " stale PR" + (stalePRs != 1 ? "s" : "")));
 
-        // Score always out of 5
-        int score = passed * 20;
+        // Signal 6: has recent release (last 90 days)
+        Optional<OffsetDateTime> latestRelease = releaseRepository.findLatestPublishedAt(repoId);
+        boolean hasRecentRelease = latestRelease.map(d -> d.isAfter(OffsetDateTime.now().minusDays(90))).orElse(false);
+        if (hasRecentRelease) passed++;
+        signals.add(new RepoHealthDto.SignalDto("Recent release (90d)", hasRecentRelease,
+            latestRelease.map(d -> "Last release: " + d.toLocalDate()).orElse("No releases tracked")));
+
+        // Score out of 6 signals, normalized to 100
+        int score = (int) Math.round((double) passed / signals.size() * 100);
         String label = score >= 80 ? "Healthy" : score >= 60 ? "At Risk" : "Needs Attention";
         return new RepoHealthDto(score, label, signals);
     }

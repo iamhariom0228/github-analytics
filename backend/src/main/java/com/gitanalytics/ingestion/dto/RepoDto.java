@@ -16,4 +16,10 @@ public class RepoDto {
     private boolean isPrivate;
     private String syncStatus;
     private OffsetDateTime lastSyncedAt;
+    private Integer stars;
+    private Integer forks;
+    private Integer watchers;
+    private Integer openIssuesCount;
+    private String language;
+    private String description;
 }

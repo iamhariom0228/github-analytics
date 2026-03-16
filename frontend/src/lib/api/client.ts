@@ -76,6 +76,9 @@ export const getSyncStatus = (id: string) =>
 export const getRepoSuggestions = () =>
   apiClient.get<ApiResponse<GitHubRepoSuggestion[]>>("/repos/suggestions").then(unwrap);
 
+export const forkRepo = (owner: string, repo: string) =>
+  apiClient.post<ApiResponse<{ htmlUrl: string }>>("/repos/fork", { owner, repo }).then(unwrap);
+
 // Dashboard
 export const getDashboard = () =>
   apiClient.get<ApiResponse<DashboardSummary>>("/dashboard").then(unwrap);

@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -28,6 +29,7 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
            "AND c.committedAt > :since")
     long countByRepoSince(UUID repoId, OffsetDateTime since);
 
+    @Transactional
     @Query(value = "INSERT INTO commits (repo_id, sha, author_login, author_github_id, " +
                    "message_summary, additions, deletions, committed_at) " +
                    "VALUES (:#{#c.repo.id}, :#{#c.sha}, :#{#c.authorLogin}, :#{#c.authorGithubId}, " +

@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const PUBLIC_PATHS = ["/", "/api/backend/auth/github"];
+const PUBLIC_PATHS = ["/", "/explore", "/api/backend/auth/github"];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow public paths and Next.js internals
   if (
-    PUBLIC_PATHS.some((p) => pathname === p) ||
+    PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/")) ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/api/backend/auth/github")
   ) {
