@@ -151,7 +151,11 @@ public class AnalyticsService {
             int longest = row[0] != null ? ((Number) row[0]).intValue() : 0;
             int current = 0;
             if (row[1] != null && row[2] != null) {
-                LocalDate lastDay = ((java.sql.Date) row[2]).toLocalDate();
+                LocalDate lastDay = switch (row[2]) {
+                    case java.sql.Date d -> d.toLocalDate();
+                    case LocalDate d -> d;
+                    default -> LocalDate.parse(row[2].toString().substring(0, 10));
+                };
                 LocalDate today = LocalDate.now(ZoneId.of(timezone));
                 if (!lastDay.isBefore(today.minusDays(1))) {
                     current = ((Number) row[1]).intValue();

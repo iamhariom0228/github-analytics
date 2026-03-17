@@ -4,6 +4,7 @@ import com.gitanalytics.auth.dto.UserProfileDto;
 import com.gitanalytics.auth.entity.User;
 import com.gitanalytics.auth.repository.UserRepository;
 import com.gitanalytics.auth.service.GitHubOAuthService;
+import com.gitanalytics.shared.exception.ResourceNotFoundException;
 import com.gitanalytics.shared.security.JwtService;
 import com.gitanalytics.shared.util.ApiResponse;
 import jakarta.servlet.http.Cookie;
@@ -46,7 +47,7 @@ public class AuthController {
 
         Cookie cookie = new Cookie("jwt", token);
         cookie.setHttpOnly(true);
-        cookie.setSecure("true".equals(System.getenv("COOKIE_SECURE")));
+        cookie.setSecure(!"false".equalsIgnoreCase(System.getenv("COOKIE_SECURE"))); // defaults to true
         cookie.setPath("/");
         cookie.setMaxAge(7 * 24 * 60 * 60); // 7 days
         response.addCookie(cookie);
@@ -70,7 +71,7 @@ public class AuthController {
         // Clear cookie
         Cookie cookie = new Cookie("jwt", "");
         cookie.setHttpOnly(true);
-        cookie.setSecure("true".equals(System.getenv("COOKIE_SECURE")));
+        cookie.setSecure(!"false".equalsIgnoreCase(System.getenv("COOKIE_SECURE"))); // defaults to true
         cookie.setPath("/");
         cookie.setMaxAge(0);
         response.addCookie(cookie);
@@ -97,7 +98,7 @@ public class AuthController {
     public ResponseEntity<ApiResponse<UserProfileDto>> me(@AuthenticationPrincipal UserDetails principal) {
         UUID userId = UUID.fromString(principal.getUsername());
         User user = userRepository.findById(userId)
-            .orElseThrow(() -> new RuntimeException("User not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         return ResponseEntity.ok(ApiResponse.ok(UserProfileDto.builder()
             .id(user.getId())

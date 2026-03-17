@@ -97,8 +97,8 @@ export function InsightsPanel({ insights }: Props) {
     <div className="bg-card border border-border rounded-xl p-6">
       <h2 className="font-semibold mb-4">Insights</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {insights.map((insight, i) => (
-          <InsightCard key={i} insight={insight} />
+        {insights.map((insight) => (
+          <InsightCard key={`${insight.metricLabel ?? ""}:${insight.message}`} insight={insight} />
         ))}
       </div>
     </div>

@@ -101,5 +101,5 @@ management:
 
 logging:
   level:
-    com.gitanalytics: DEBUG
-    org.springframework.security: INFO
+    com.gitanalytics: INFO
+    org.springframework.security: WARN

@@ -16,14 +16,22 @@ import {
   getAiSummary,
 } from "@/lib/api/client";
 
+// Analytics data changes infrequently — 5 min staleTime prevents refetch on every window focus
+const ANALYTICS_STALE_MS = 5 * 60 * 1000;
+
 export function useDashboard() {
-  return useQuery({ queryKey: ["dashboard"], queryFn: getDashboard });
+  return useQuery({
+    queryKey: ["dashboard"],
+    queryFn: getDashboard,
+    staleTime: ANALYTICS_STALE_MS,
+  });
 }
 
 export function useHeatmap(repoId?: string, timezone?: string, from?: string, to?: string) {
   return useQuery({
     queryKey: ["heatmap", repoId, timezone, from, to],
     queryFn: () => getHeatmap(repoId, timezone, from, to),
+    staleTime: ANALYTICS_STALE_MS,
   });
 }
 
@@ -31,6 +39,7 @@ export function usePRLifecycle(from: string, to: string) {
   return useQuery({
     queryKey: ["pr-lifecycle", from, to],
     queryFn: () => getPRLifecycle(from, to),
+    staleTime: ANALYTICS_STALE_MS,
   });
 }
 
@@ -38,6 +47,7 @@ export function useReviewsSummary(from: string, to: string) {
   return useQuery({
     queryKey: ["reviews-summary", from, to],
     queryFn: () => getReviewsSummary(from, to),
+    staleTime: ANALYTICS_STALE_MS,
   });
 }
 
@@ -45,6 +55,7 @@ export function usePRSizeDistribution(from: string, to: string) {
   return useQuery({
     queryKey: ["pr-size-distribution", from, to],
     queryFn: () => getPRSizeDistribution(from, to),
+    staleTime: ANALYTICS_STALE_MS,
   });
 }
 
@@ -52,6 +63,7 @@ export function useStreak(timezone?: string) {
   return useQuery({
     queryKey: ["streak", timezone],
     queryFn: () => getStreak(timezone),
+    staleTime: ANALYTICS_STALE_MS,
   });
 }
 
@@ -60,6 +72,7 @@ export function useLeaderboard(repoId: string, from: string, to: string) {
     queryKey: ["leaderboard", repoId, from, to],
     queryFn: () => getLeaderboard(repoId, from, to),
     enabled: !!repoId,
+    staleTime: ANALYTICS_STALE_MS,
   });
 }
 
@@ -68,6 +81,7 @@ export function useBusFactor(repoId: string) {
     queryKey: ["bus-factor", repoId],
     queryFn: () => getBusFactor(repoId),
     enabled: !!repoId,
+    staleTime: ANALYTICS_STALE_MS,
   });
 }
 
@@ -76,6 +90,7 @@ export function useStalePRs(repoId: string, days = 7) {
     queryKey: ["stale-prs", repoId, days],
     queryFn: () => getStalePRs(repoId, days),
     enabled: !!repoId,
+    staleTime: ANALYTICS_STALE_MS,
   });
 }
 
@@ -83,6 +98,7 @@ export function useInsights(timezone?: string, from?: string, to?: string) {
   return useQuery({
     queryKey: ["insights", timezone, from, to],
     queryFn: () => getInsights(timezone, from, to),
+    staleTime: ANALYTICS_STALE_MS,
   });
 }
 
@@ -90,6 +106,7 @@ export function useCommitTrend(from: string, to: string, granularity = "daily") 
   return useQuery({
     queryKey: ["commit-trend", from, to, granularity],
     queryFn: () => getCommitTrend(from, to, granularity),
+    staleTime: ANALYTICS_STALE_MS,
   });
 }
 
@@ -97,6 +114,7 @@ export function useOverview(from: string, to: string) {
   return useQuery({
     queryKey: ["overview", from, to],
     queryFn: () => getOverview(from, to),
+    staleTime: ANALYTICS_STALE_MS,
   });
 }
 
@@ -105,6 +123,7 @@ export function useRepoHealth(repoId: string) {
     queryKey: ["repo-health", repoId],
     queryFn: () => getRepoHealth(repoId),
     enabled: !!repoId,
+    staleTime: ANALYTICS_STALE_MS,
   });
 }
 
@@ -112,6 +131,6 @@ export function useAiSummary(timezone?: string, from?: string, to?: string) {
   return useQuery({
     queryKey: ["ai-summary", timezone, from, to],
     queryFn: () => getAiSummary(timezone, from, to),
-    staleTime: 6 * 60 * 60 * 1000, // 6 hours — matches Redis cache TTL per window
+    staleTime: 6 * 60 * 60 * 1000, // 6 hours — AI summaries are expensive, cache aggressively
   });
 }

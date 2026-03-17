@@ -166,7 +166,8 @@ public class RepoService {
     private SyncJob triggerSync(User user, TrackedRepo repo, String syncType) {
         String lockKey = "ga:sync:lock:" + repo.getId();
         Boolean locked = redisTemplate.opsForValue().setIfAbsent(lockKey, "locked", 5, TimeUnit.MINUTES);
-        if (Boolean.FALSE.equals(locked)) {
+        // TRUE = lock acquired; FALSE = already locked; null = Redis error → treat as locked to be safe
+        if (!Boolean.TRUE.equals(locked)) {
             throw new IllegalStateException("Sync already in progress for this repository");
         }
 
