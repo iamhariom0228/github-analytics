@@ -36,11 +36,19 @@ public class AnalyticsDaoImpl implements AnalyticsDao {
                 .toList();
     }
 
+    // Spring Data JPA wraps single-row native query results as Object[]{row},
+    // where each element is itself the Object[] row. Unwrap one level.
+    private static Object[] firstRow(Object[] result) {
+        if (result == null || result.length == 0) return result;
+        if (result[0] instanceof Object[]) return (Object[]) result[0];
+        return result;
+    }
+
     // ── PR Lifecycle ─────────────────────────────────────────────────────────
 
     @Override
     public Object[] getPRLifecycleStats(UUID userId, OffsetDateTime from, OffsetDateTime to) {
-        return analyticsRepository.getPRLifecycleStats(userId, from, to);
+        return firstRow(analyticsRepository.getPRLifecycleStats(userId, from, to));
     }
 
     // ── Team Leaderboard ─────────────────────────────────────────────────────
@@ -68,7 +76,7 @@ public class AnalyticsDaoImpl implements AnalyticsDao {
 
     @Override
     public Object[] getReviewsSummaryRow(UUID userId, String login, OffsetDateTime from, OffsetDateTime to) {
-        return analyticsRepository.getReviewsSummaryRow(userId, login, from, to);
+        return firstRow(analyticsRepository.getReviewsSummaryRow(userId, login, from, to));
     }
 
     // ── Repo Health Signals ───────────────────────────────────────────────────
@@ -80,7 +88,7 @@ public class AnalyticsDaoImpl implements AnalyticsDao {
 
     @Override
     public Object[] getPRReviewCoverage(UUID repoId, OffsetDateTime since) {
-        return analyticsRepository.getPRReviewCoverage(repoId, since);
+        return firstRow(analyticsRepository.getPRReviewCoverage(repoId, since));
     }
 
     @Override
@@ -137,26 +145,28 @@ public class AnalyticsDaoImpl implements AnalyticsDao {
 
     @Override
     public Object[] getLinesAddedRemoved(UUID userId, String login, OffsetDateTime from, OffsetDateTime to) {
-        return analyticsRepository.getLinesAddedRemoved(userId, login, from, to);
+        return firstRow(analyticsRepository.getLinesAddedRemoved(userId, login, from, to));
     }
 
     // ── Insights ─────────────────────────────────────────────────────────────
 
     @Override
     public Object[] getPeakCodingTime(UUID userId, String login, String timezone) {
-        return analyticsRepository.getPeakCodingTime(userId, login, timezone).orElse(null);
+        return analyticsRepository.getPeakCodingTime(userId, login, timezone)
+                .map(AnalyticsDaoImpl::firstRow)
+                .orElse(null);
     }
 
     @Override
     public Object[] getWeekdayWeekendSplit(UUID userId, String login, String timezone) {
-        return analyticsRepository.getWeekdayWeekendSplit(userId, login, timezone);
+        return firstRow(analyticsRepository.getWeekdayWeekendSplit(userId, login, timezone));
     }
 
     @Override
     public Object[] getCommitTrendComparison(UUID userId, String login,
                                              OffsetDateTime from, OffsetDateTime to,
                                              OffsetDateTime prevFrom, OffsetDateTime prevTo) {
-        return analyticsRepository.getCommitTrendComparison(userId, login, from, to, prevFrom, prevTo);
+        return firstRow(analyticsRepository.getCommitTrendComparison(userId, login, from, to, prevFrom, prevTo));
     }
 
     @Override
@@ -171,7 +181,7 @@ public class AnalyticsDaoImpl implements AnalyticsDao {
 
     @Override
     public Object[] getReviewStyleStats(UUID userId, String login, OffsetDateTime from, OffsetDateTime to) {
-        return analyticsRepository.getReviewStyleStats(userId, login, from, to);
+        return firstRow(analyticsRepository.getReviewStyleStats(userId, login, from, to));
     }
 
     @Override
@@ -183,7 +193,7 @@ public class AnalyticsDaoImpl implements AnalyticsDao {
 
     @Override
     public Object[] getStreakData(UUID userId, String login, String timezone) {
-        return analyticsRepository.getStreakData(userId, login, timezone);
+        return firstRow(analyticsRepository.getStreakData(userId, login, timezone));
     }
 
     // ── Public Repo Stats ────────────────────────────────────────────────────
@@ -195,7 +205,7 @@ public class AnalyticsDaoImpl implements AnalyticsDao {
 
     @Override
     public Object[] getPRStatsByRepo(UUID repoId) {
-        return analyticsRepository.getPRStatsByRepo(repoId);
+        return firstRow(analyticsRepository.getPRStatsByRepo(repoId));
     }
 
     @Override

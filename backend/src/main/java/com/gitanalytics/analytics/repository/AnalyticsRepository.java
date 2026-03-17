@@ -22,8 +22,8 @@ public interface AnalyticsRepository extends Repository<Commit, Long> {
             JOIN tracked_repos r ON c.repo_id = r.id
             WHERE r.user_id = :userId
               AND c.author_login = (SELECT username FROM users WHERE id = :userId)
-              AND (:from IS NULL OR c.committed_at >= :from)
-              AND (:to   IS NULL OR c.committed_at <= :to)
+              AND (CAST(:from AS timestamptz) IS NULL OR c.committed_at >= :from)
+              AND (CAST(:to   AS timestamptz) IS NULL OR c.committed_at <= :to)
             GROUP BY day, hour
             ORDER BY day, hour
             """)
@@ -39,8 +39,8 @@ public interface AnalyticsRepository extends Repository<Commit, Long> {
             WHERE r.user_id = :userId
               AND c.author_login = (SELECT username FROM users WHERE id = :userId)
               AND r.id = :repoId
-              AND (:from IS NULL OR c.committed_at >= :from)
-              AND (:to   IS NULL OR c.committed_at <= :to)
+              AND (CAST(:from AS timestamptz) IS NULL OR c.committed_at >= :from)
+              AND (CAST(:to   AS timestamptz) IS NULL OR c.committed_at <= :to)
             GROUP BY day, hour
             ORDER BY day, hour
             """)
