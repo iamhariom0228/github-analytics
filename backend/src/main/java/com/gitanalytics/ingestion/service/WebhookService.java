@@ -4,7 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gitanalytics.ingestion.entity.TrackedRepo;
 import com.gitanalytics.ingestion.kafka.SyncProducer;
-import com.gitanalytics.ingestion.repository.TrackedRepoRepository;
+import com.gitanalytics.ingestion.dao.TrackedRepoDao;
 import com.gitanalytics.shared.config.AppProperties;
 import com.gitanalytics.shared.exception.UnauthorizedException;
 import com.gitanalytics.shared.kafka.events.WebhookReceivedEvent;
@@ -23,7 +23,7 @@ import java.util.HexFormat;
 @RequiredArgsConstructor
 public class WebhookService {
 
-    private final TrackedRepoRepository trackedRepoRepository;
+    private final TrackedRepoDao trackedRepoDao;
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final AppProperties appProperties;
     private final ObjectMapper objectMapper;
@@ -38,7 +38,7 @@ public class WebhookService {
 
             long githubRepoId = repoNode.get("id").asLong();
             // Find the tracked repo across all users
-            trackedRepoRepository.findAll().stream()
+            trackedRepoDao.findAll().stream()
                 .filter(r -> r.getGithubRepoId() == githubRepoId)
                 .forEach(repo -> publishWebhookEvent(repo, event, deliveryId, payload));
 

@@ -2,9 +2,9 @@ package com.gitanalytics.digest.service;
 
 import com.gitanalytics.analytics.service.AnalyticsService;
 import com.gitanalytics.auth.entity.User;
+import com.gitanalytics.auth.dao.UserDao;
 import com.gitanalytics.auth.entity.UserPreferences;
 import com.gitanalytics.auth.repository.UserPreferencesRepository;
-import com.gitanalytics.auth.repository.UserRepository;
 import com.gitanalytics.digest.dto.DigestPreferencesDto;
 import com.gitanalytics.digest.entity.DigestLog;
 import com.gitanalytics.digest.repository.DigestLogRepository;
@@ -28,7 +28,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class DigestService {
 
-    private final UserRepository userRepository;
+    private final UserDao userDao;
     private final UserPreferencesRepository userPreferencesRepository;
     private final DigestLogRepository digestLogRepository;
     private final AnalyticsService analyticsService;
@@ -72,7 +72,7 @@ public class DigestService {
     }
 
     private void sendDigest(UUID userId, LocalDate weekStart, boolean preview) {
-        User user = userRepository.findById(userId)
+        User user = userDao.findById(userId)
             .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         if (user.getEmail() == null || user.getEmail().isBlank()) {
             log.warn("No email for user {} — skipping digest", userId);

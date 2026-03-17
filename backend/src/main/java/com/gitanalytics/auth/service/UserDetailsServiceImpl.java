@@ -1,7 +1,7 @@
 package com.gitanalytics.auth.service;
 
+import com.gitanalytics.auth.dao.UserDao;
 import com.gitanalytics.auth.entity.User;
-import com.gitanalytics.auth.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -16,11 +16,11 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class UserDetailsServiceImpl implements UserDetailsService {
 
-    private final UserRepository userRepository;
+    private final UserDao userDao;
 
     @Override
     public UserDetails loadUserByUsername(String userId) throws UsernameNotFoundException {
-        User user = userRepository.findById(UUID.fromString(userId))
+        User user = userDao.findById(UUID.fromString(userId))
             .orElseThrow(() -> new UsernameNotFoundException("User not found: " + userId));
 
         return new org.springframework.security.core.userdetails.User(

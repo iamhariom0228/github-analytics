@@ -2,14 +2,14 @@ package com.gitanalytics.ingestion.kafka;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.gitanalytics.ingestion.dao.PrReviewDao;
+import com.gitanalytics.ingestion.dao.PullRequestDao;
+import com.gitanalytics.ingestion.dao.SyncJobDao;
+import com.gitanalytics.ingestion.dao.TrackedRepoDao;
 import com.gitanalytics.ingestion.entity.PullRequest;
 import com.gitanalytics.ingestion.entity.PrReview;
 import com.gitanalytics.ingestion.entity.SyncJob;
 import com.gitanalytics.ingestion.entity.TrackedRepo;
-import com.gitanalytics.ingestion.repository.PullRequestRepository;
-import com.gitanalytics.ingestion.repository.PrReviewRepository;
-import com.gitanalytics.ingestion.repository.SyncJobRepository;
-import com.gitanalytics.ingestion.repository.TrackedRepoRepository;
 import com.gitanalytics.shared.kafka.events.SyncCompletedEvent;
 import com.gitanalytics.shared.kafka.events.SyncRequestedEvent;
 import com.gitanalytics.shared.kafka.events.WebhookReceivedEvent;
@@ -28,10 +28,10 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class WebhookConsumer {
 
-    private final TrackedRepoRepository trackedRepoRepository;
-    private final PullRequestRepository pullRequestRepository;
-    private final PrReviewRepository prReviewRepository;
-    private final SyncJobRepository syncJobRepository;
+    private final TrackedRepoDao trackedRepoDao;
+    private final PullRequestDao pullRequestDao;
+    private final PrReviewDao prReviewDao;
+    private final SyncJobDao syncJobDao;
     private final SyncProducer syncProducer;
     private final ObjectMapper objectMapper;
 
@@ -46,28 +46,24 @@ public class WebhookConsumer {
                 case "pull_request_review" -> processPullRequestReviewEvent(event.getRepoId(), payload);
                 case "push" -> triggerIncrementalSync(event.getRepoId(), event.getUserId());
             }
-            // Trigger cache invalidation
             syncProducer.publishSyncCompleted(new SyncCompletedEvent(
-                null, event.getUserId(), List.of(event.getRepoId()), 1
-            ));
+                null, event.getUserId(), List.of(event.getRepoId()), 1));
         } catch (Exception e) {
             log.error("Failed to process webhook event: {}", e.getMessage(), e);
         }
     }
 
     private void triggerIncrementalSync(UUID repoId, UUID userId) {
-        TrackedRepo repo = trackedRepoRepository.findById(repoId).orElse(null);
+        TrackedRepo repo = trackedRepoDao.findById(repoId).orElse(null);
         if (repo == null || repo.getSyncStatus() == TrackedRepo.SyncStatus.SYNCING) return;
         try {
-            SyncJob job = syncJobRepository.save(SyncJob.builder()
-                .user(repo.getUser())
-                .repo(repo)
+            SyncJob job = syncJobDao.save(SyncJob.builder()
+                .user(repo.getUser()).repo(repo)
                 .jobType(SyncJob.JobType.INCREMENTAL_SYNC)
                 .status(SyncJob.JobStatus.PENDING)
                 .build());
             syncProducer.publishSyncRequested(new SyncRequestedEvent(
-                job.getId(), userId, repoId, "INCREMENTAL_SYNC"
-            ));
+                job.getId(), userId, repoId, "INCREMENTAL_SYNC"));
             log.info("Triggered incremental sync for repo {} via webhook push", repo.getFullName());
         } catch (Exception e) {
             log.error("Failed to trigger sync from push webhook for repo {}: {}", repoId, e.getMessage());
@@ -79,13 +75,12 @@ public class WebhookConsumer {
         if (prNode == null) return;
 
         int number = prNode.get("number").asInt();
-        PullRequest pr = pullRequestRepository.findByRepoIdAndPrNumber(repoId, number)
+        PullRequest pr = pullRequestDao.findByRepoIdAndPrNumber(repoId, number)
             .orElseGet(() -> {
-                var repo = trackedRepoRepository.findById(repoId).orElse(null);
+                TrackedRepo repo = trackedRepoDao.findById(repoId).orElse(null);
                 if (repo == null) return null;
                 return PullRequest.builder().repo(repo).prNumber(number).build();
             });
-
         if (pr == null) return;
 
         pr.setTitle(prNode.get("title").asText());
@@ -93,8 +88,8 @@ public class WebhookConsumer {
 
         String state = prNode.get("state").asText();
         boolean merged = !prNode.get("merged_at").isNull();
-        pr.setState(merged ? PullRequest.PrState.MERGED : "closed".equals(state)
-            ? PullRequest.PrState.CLOSED : PullRequest.PrState.OPEN);
+        pr.setState(merged ? PullRequest.PrState.MERGED :
+            "closed".equals(state) ? PullRequest.PrState.CLOSED : PullRequest.PrState.OPEN);
 
         if (!prNode.get("created_at").isNull())
             pr.setCreatedAt(OffsetDateTime.parse(prNode.get("created_at").asText()));
@@ -107,7 +102,7 @@ public class WebhookConsumer {
         if (prNode.has("deletions")) pr.setDeletions(prNode.get("deletions").asInt(0));
         if (prNode.has("changed_files")) pr.setChangedFiles(prNode.get("changed_files").asInt(0));
 
-        pullRequestRepository.save(pr);
+        pullRequestDao.save(pr);
     }
 
     private void processPullRequestReviewEvent(UUID repoId, JsonNode payload) {
@@ -116,7 +111,7 @@ public class WebhookConsumer {
         if (reviewNode == null || prNode == null) return;
 
         int prNumber = prNode.get("number").asInt();
-        PullRequest pr = pullRequestRepository.findByRepoIdAndPrNumber(repoId, prNumber).orElse(null);
+        PullRequest pr = pullRequestDao.findByRepoIdAndPrNumber(repoId, prNumber).orElse(null);
         if (pr == null) return;
 
         PrReview.ReviewState reviewState;
@@ -129,17 +124,14 @@ public class WebhookConsumer {
         String reviewerLogin = reviewNode.get("user").get("login").asText();
         OffsetDateTime submittedAt = OffsetDateTime.parse(reviewNode.get("submitted_at").asText());
 
-        prReviewRepository.save(PrReview.builder()
-            .pullRequest(pr)
-            .reviewerLogin(reviewerLogin)
-            .state(reviewState)
-            .submittedAt(submittedAt)
+        prReviewDao.save(PrReview.builder()
+            .pullRequest(pr).reviewerLogin(reviewerLogin)
+            .state(reviewState).submittedAt(submittedAt)
             .build());
 
-        // Update first_review_at
         if (pr.getFirstReviewAt() == null || submittedAt.isBefore(pr.getFirstReviewAt())) {
             pr.setFirstReviewAt(submittedAt);
-            pullRequestRepository.save(pr);
+            pullRequestDao.save(pr);
         }
     }
 }

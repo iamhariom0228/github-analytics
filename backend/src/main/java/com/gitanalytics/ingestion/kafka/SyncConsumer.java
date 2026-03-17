@@ -1,11 +1,11 @@
 package com.gitanalytics.ingestion.kafka;
 
+import com.gitanalytics.auth.dao.UserDao;
 import com.gitanalytics.auth.entity.User;
-import com.gitanalytics.auth.repository.UserRepository;
 import com.gitanalytics.auth.service.GitHubOAuthService;
 import com.gitanalytics.ingestion.client.GitHubApiClient;
+import com.gitanalytics.ingestion.dao.*;
 import com.gitanalytics.ingestion.entity.*;
-import com.gitanalytics.ingestion.repository.*;
 import com.gitanalytics.shared.exception.GitHubApiException;
 import com.gitanalytics.shared.kafka.events.SyncCompletedEvent;
 import com.gitanalytics.shared.kafka.events.SyncRequestedEvent;
@@ -14,7 +14,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.HashSet;
@@ -28,13 +27,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 @RequiredArgsConstructor
 public class SyncConsumer {
 
-    private final TrackedRepoRepository trackedRepoRepository;
-    private final CommitRepository commitRepository;
-    private final PullRequestRepository pullRequestRepository;
-    private final PrReviewRepository prReviewRepository;
-    private final SyncJobRepository syncJobRepository;
-    private final ReleaseRepository releaseRepository;
-    private final UserRepository userRepository;
+    private final TrackedRepoDao trackedRepoDao;
+    private final CommitDao commitDao;
+    private final PullRequestDao pullRequestDao;
+    private final PrReviewDao prReviewDao;
+    private final SyncJobDao syncJobDao;
+    private final ReleaseDao releaseDao;
+    private final UserDao userDao;
     private final GitHubApiClient gitHubApiClient;
     private final GitHubOAuthService gitHubOAuthService;
     private final SyncProducer syncProducer;
@@ -42,27 +41,24 @@ public class SyncConsumer {
 
     @KafkaListener(topics = "ga.sync.requested", groupId = "github-analytics")
     public void handleSyncRequested(SyncRequestedEvent event) {
-        log.info("Processing sync: jobId={}, repoId={}, type={}", event.getSyncJobId(), event.getRepoId(), event.getSyncType());
+        log.info("Processing sync: jobId={}, repoId={}, type={}",
+            event.getSyncJobId(), event.getRepoId(), event.getSyncType());
 
-        TrackedRepo repo = trackedRepoRepository.findById(event.getRepoId()).orElse(null);
-        if (repo == null) {
-            log.warn("Repo not found: {}", event.getRepoId());
-            return;
-        }
+        TrackedRepo repo = trackedRepoDao.findById(event.getRepoId()).orElse(null);
+        if (repo == null) { log.warn("Repo not found: {}", event.getRepoId()); return; }
 
-        SyncJob job = syncJobRepository.findById(event.getSyncJobId()).orElse(null);
+        SyncJob job = syncJobDao.findById(event.getSyncJobId()).orElse(null);
         if (job == null) return;
 
-        // Mark running
         repo.setSyncStatus(TrackedRepo.SyncStatus.SYNCING);
-        trackedRepoRepository.save(repo);
+        trackedRepoDao.save(repo);
         job.setStatus(SyncJob.JobStatus.RUNNING);
         job.setStartedAt(OffsetDateTime.now());
-        syncJobRepository.save(job);
+        syncJobDao.save(job);
 
         String lockKey = "ga:sync:lock:" + repo.getId();
         try {
-            User user = userRepository.findById(event.getUserId())
+            User user = userDao.findById(event.getUserId())
                 .orElseThrow(() -> new RuntimeException("User not found"));
             String accessToken = gitHubOAuthService.decryptAccessToken(user);
 
@@ -76,38 +72,34 @@ public class SyncConsumer {
 
             repo.setSyncStatus(TrackedRepo.SyncStatus.DONE);
             repo.setLastSyncedAt(OffsetDateTime.now());
-            trackedRepoRepository.save(repo);
+            trackedRepoDao.save(repo);
 
             job.setStatus(SyncJob.JobStatus.DONE);
             job.setCompletedAt(OffsetDateTime.now());
             job.setRecordsProcessed(count.get());
-            syncJobRepository.save(job);
+            syncJobDao.save(job);
 
             syncProducer.publishSyncCompleted(new SyncCompletedEvent(
-                event.getSyncJobId(), event.getUserId(), List.of(event.getRepoId()), count.get()
-            ));
+                event.getSyncJobId(), event.getUserId(), List.of(event.getRepoId()), count.get()));
 
         } catch (Exception e) {
             log.error("Sync failed for repo {}: {}", event.getRepoId(), e.getMessage(), e);
             repo.setSyncStatus(TrackedRepo.SyncStatus.FAILED);
-            trackedRepoRepository.save(repo);
+            trackedRepoDao.save(repo);
             job.setStatus(SyncJob.JobStatus.FAILED);
             job.setCompletedAt(OffsetDateTime.now());
             job.setErrorMessage(e.getMessage());
-            syncJobRepository.save(job);
+            syncJobDao.save(job);
         } finally {
-            // Always release the lock so re-syncs aren't blocked
             redisTemplate.delete(lockKey);
         }
     }
 
     private void syncCommits(TrackedRepo repo, String token, User user,
                               OffsetDateTime since, AtomicInteger count) {
-        // GraphQL: fetch 100 commits per request with additions/deletions + author email — no N+1
         List<GitHubApiClient.GraphQLCommitDto> commits = gitHubApiClient.getCommitsWithStats(
             token, user.getId(), repo.getOwner(), repo.getName(), since);
 
-        // Build email set for author resolution when GitHub user link is missing
         Set<String> knownEmails = new HashSet<>();
         if (user.getEmail() != null) knownEmails.add(user.getEmail().trim());
 
@@ -117,36 +109,28 @@ public class SyncConsumer {
             String authorLogin = dto.getAuthorLogin();
             Long authorGithubId = dto.getAuthorGithubId();
 
-            // Email-based resolution: if GitHub didn't link the commit to a user account,
-            // check if the commit email matches any of the user's known emails
             if (authorLogin == null && dto.getAuthorEmail() != null) {
                 String email = dto.getAuthorEmail().trim().toLowerCase();
-                boolean isOwner = knownEmails.stream()
-                    .anyMatch(e -> e.toLowerCase().equals(email));
-                if (isOwner) {
+                if (knownEmails.stream().anyMatch(e -> e.toLowerCase().equals(email))) {
                     authorLogin = user.getUsername();
                     authorGithubId = user.getGithubId();
                 }
             }
 
-            // Fallback to committer
             if (authorLogin == null) {
                 authorLogin = dto.getCommitterLogin();
                 authorGithubId = dto.getCommitterGithubId();
             }
 
             Commit commit = Commit.builder()
-                .repo(repo)
-                .sha(dto.getSha())
-                .authorLogin(authorLogin)
-                .authorGithubId(authorGithubId)
+                .repo(repo).sha(dto.getSha())
+                .authorLogin(authorLogin).authorGithubId(authorGithubId)
                 .messageSummary(firstLine(dto.getMessage()))
-                .additions(dto.getAdditions())
-                .deletions(dto.getDeletions())
+                .additions(dto.getAdditions()).deletions(dto.getDeletions())
                 .committedAt(dto.getCommittedDate())
                 .build();
             try {
-                commitRepository.upsert(commit);
+                commitDao.upsert(commit);
                 count.incrementAndGet();
             } catch (Exception e) {
                 log.debug("Failed to upsert commit {}: {}", dto.getSha(), e.getMessage());
@@ -165,7 +149,7 @@ public class SyncConsumer {
                 default -> PullRequest.PrState.OPEN;
             };
 
-            PullRequest pr = pullRequestRepository.findByRepoIdAndPrNumber(repo.getId(), dto.getNumber())
+            PullRequest pr = pullRequestDao.findByRepoIdAndPrNumber(repo.getId(), dto.getNumber())
                 .orElseGet(() -> PullRequest.builder().repo(repo).prNumber(dto.getNumber()).build());
 
             pr.setTitle(dto.getTitle());
@@ -178,7 +162,6 @@ public class SyncConsumer {
             pr.setDeletions(dto.getDeletions());
             pr.setChangedFiles(dto.getChangedFiles());
 
-            // If changedFiles is 0 (list API doesn't return file stats), fetch individual PR
             if (dto.getChangedFiles() == 0) {
                 GitHubApiClient.GitHubPRDetailDto detail =
                     gitHubApiClient.getPullRequestDetail(token, userId, repo.getOwner(), repo.getName(), dto.getNumber());
@@ -189,10 +172,8 @@ public class SyncConsumer {
                 }
             }
 
-            PullRequest savedPr = pullRequestRepository.save(pr);
+            PullRequest savedPr = pullRequestDao.save(pr);
             count.incrementAndGet();
-
-            // Sync reviews
             syncReviews(savedPr, repo, token, userId);
         }
     }
@@ -211,7 +192,7 @@ public class SyncConsumer {
                 } catch (IllegalArgumentException e) {
                     state = PrReview.ReviewState.COMMENTED;
                 }
-                prReviewRepository.save(PrReview.builder()
+                prReviewDao.save(PrReview.builder()
                     .pullRequest(pr)
                     .reviewerLogin(dto.getUser().getLogin())
                     .state(state)
@@ -224,7 +205,7 @@ public class SyncConsumer {
             }
             if (firstReview != null && pr.getFirstReviewAt() == null) {
                 pr.setFirstReviewAt(firstReview);
-                pullRequestRepository.save(pr);
+                pullRequestDao.save(pr);
             }
         } catch (GitHubApiException e) {
             log.warn("Failed to sync reviews for PR #{}: {}", pr.getPrNumber(), e.getMessage());
@@ -232,7 +213,8 @@ public class SyncConsumer {
     }
 
     private void syncRepoMeta(TrackedRepo repo, String token, UUID userId) {
-        GitHubApiClient.GitHubRepoMetaDto meta = gitHubApiClient.getRepoMeta(token, userId, repo.getOwner(), repo.getName());
+        GitHubApiClient.GitHubRepoMetaDto meta = gitHubApiClient.getRepoMeta(
+            token, userId, repo.getOwner(), repo.getName());
         if (meta != null) {
             repo.setStars(meta.getStargazersCount() != null ? meta.getStargazersCount() : 0);
             repo.setForks(meta.getForksCount() != null ? meta.getForksCount() : 0);
@@ -240,22 +222,20 @@ public class SyncConsumer {
             repo.setOpenIssuesCount(meta.getOpenIssuesCount() != null ? meta.getOpenIssuesCount() : 0);
             repo.setLanguage(meta.getLanguage());
             repo.setDescription(meta.getDescription());
-            trackedRepoRepository.save(repo);
+            trackedRepoDao.save(repo);
         }
     }
 
     private void syncReleases(TrackedRepo repo, String token, UUID userId, AtomicInteger count) {
-        List<GitHubApiClient.GitHubReleaseDto> releases = gitHubApiClient.getReleases(token, userId, repo.getOwner(), repo.getName());
+        List<GitHubApiClient.GitHubReleaseDto> releases = gitHubApiClient.getReleases(
+            token, userId, repo.getOwner(), repo.getName());
         for (GitHubApiClient.GitHubReleaseDto dto : releases) {
             if (dto.getTagName() == null) continue;
-            Release release = Release.builder()
-                .repo(repo)
-                .tagName(dto.getTagName())
-                .name(dto.getName())
-                .publishedAt(dto.getPublishedAt())
-                .build();
             try {
-                releaseRepository.upsert(release);
+                releaseDao.upsert(Release.builder()
+                    .repo(repo).tagName(dto.getTagName())
+                    .name(dto.getName()).publishedAt(dto.getPublishedAt())
+                    .build());
             } catch (Exception e) {
                 log.debug("Failed to upsert release {}: {}", dto.getTagName(), e.getMessage());
             }

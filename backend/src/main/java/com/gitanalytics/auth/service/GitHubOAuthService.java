@@ -3,8 +3,8 @@ package com.gitanalytics.auth.service;
 import com.gitanalytics.auth.dto.GitHubUserDto;
 import com.gitanalytics.auth.entity.User;
 import com.gitanalytics.auth.entity.UserPreferences;
+import com.gitanalytics.auth.dao.UserDao;
 import com.gitanalytics.auth.repository.UserPreferencesRepository;
-import com.gitanalytics.auth.repository.UserRepository;
 import com.gitanalytics.shared.config.AppProperties;
 import com.gitanalytics.shared.exception.UnauthorizedException;
 import com.gitanalytics.shared.util.EncryptionUtil;
@@ -29,7 +29,7 @@ public class GitHubOAuthService {
 
     private final AppProperties appProperties;
     private final RedisTemplate<String, Object> redisTemplate;
-    private final UserRepository userRepository;
+    private final UserDao userDao;
     private final UserPreferencesRepository userPreferencesRepository;
     private final EncryptionUtil encryptionUtil;
     private final WebClient.Builder webClientBuilder;
@@ -101,7 +101,7 @@ public class GitHubOAuthService {
     private User upsertUser(GitHubUserDto githubUser, String accessToken) {
         String encryptedToken = encryptionUtil.encrypt(accessToken);
 
-        User user = userRepository.findByGithubId(githubUser.getId())
+        User user = userDao.findByGithubId(githubUser.getId())
             .map(existing -> {
                 existing.setUsername(githubUser.getLogin());
                 existing.setEmail(githubUser.getEmail());
@@ -117,7 +117,7 @@ public class GitHubOAuthService {
                 .accessTokenEncrypted(encryptedToken)
                 .build());
 
-        User savedUser = userRepository.save(user);
+        User savedUser = userDao.save(user);
 
         // Create default preferences if new user
         userPreferencesRepository.findByUserId(savedUser.getId())
