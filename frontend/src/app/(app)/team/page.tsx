@@ -10,6 +10,9 @@ import { Skeleton } from "@/components/shared/Skeleton";
 import { BusFactorCard } from "./_components/BusFactorCard";
 import { LeaderboardTable } from "./_components/LeaderboardTable";
 import { StalePRsSection } from "./_components/StalePRsSection";
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
+} from "recharts";
 
 const STORAGE_KEY = "team:selectedRepoId";
 
@@ -78,6 +81,33 @@ export default function TeamPage() {
 
       <BusFactorCard busFactor={busFactor} isLoading={bfLoading} />
       <LeaderboardTable leaderboard={leaderboard} isLoading={lbLoading} />
+
+      {/* Lines changed per contributor */}
+      {!lbLoading && (leaderboard?.length ?? 0) >= 2 && (() => {
+        const count = Math.min(leaderboard!.length, 8);
+        const barSize = Math.max(14, Math.round(110 / count));
+        const chartHeight = Math.max(150, count * 60);
+        return (
+          <div className="bg-card border border-border rounded-xl p-6">
+            <h2 className="font-semibold mb-4">Lines Changed per Contributor (top 8)</h2>
+            <ResponsiveContainer width="100%" height={chartHeight}>
+              <BarChart data={leaderboard!.slice(0, 8).map((c) => ({ login: c.login ?? "(unknown)", added: c.linesAdded, removed: c.linesRemoved }))} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="login" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} allowDecimals={false} />
+                <Tooltip
+                  contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }}
+                  formatter={(v: number, name: string) => [v.toLocaleString(), name === "added" ? "Lines Added" : "Lines Removed"]}
+                />
+                <Legend formatter={(v) => v === "added" ? "Lines Added" : "Lines Removed"} wrapperStyle={{ fontSize: "12px" }} />
+                <Bar dataKey="added" fill="#22c55e" radius={[4, 4, 0, 0]} maxBarSize={barSize} />
+                <Bar dataKey="removed" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={barSize} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        );
+      })()}
+
       <StalePRsSection stalePRs={stalePRs} isLoading={staleLoading} />
     </div>
   );

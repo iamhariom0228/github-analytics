@@ -15,12 +15,16 @@ interface Props {
   isLoading: boolean;
 }
 
+const ROW_COLORS = ["#6366f1", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981", "#3b82f6", "#f97316", "#14b8a6"];
+
 export function LeaderboardTable({ leaderboard, isLoading }: Props) {
   const [search, setSearch] = useState("");
 
   const filtered = leaderboard?.filter((c) =>
     (c.login ?? "").toLowerCase().includes(search.toLowerCase())
   ) ?? [];
+
+  const maxCommits = Math.max(...(leaderboard?.map((c) => c.commits) ?? [1]), 1);
 
   return (
     <div className="bg-card border border-border rounded-xl p-6">
@@ -36,42 +40,46 @@ export function LeaderboardTable({ leaderboard, isLoading }: Props) {
       </div>
 
       {isLoading ? (
-        <div className="space-y-2">
-          {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-10" />)}
+        <div className="space-y-3">
+          {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-12" />)}
         </div>
       ) : !leaderboard?.length ? (
         <p className="text-muted-foreground text-sm py-4 text-center">No commit data in this period — try a wider date range.</p>
+      ) : filtered.length === 0 ? (
+        <p className="text-muted-foreground text-sm py-4 text-center">No contributors match &quot;{search}&quot;</p>
       ) : (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border text-muted-foreground text-left">
-              <th className="py-2 pr-4 w-8">#</th>
-              <th className="py-2 pr-4">Contributor</th>
-              <th className="py-2 pr-4 text-right">Commits</th>
-              <th className="py-2 pr-4 text-right">Lines Added</th>
-              <th className="py-2 text-right">Lines Removed</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="py-4 text-center text-muted-foreground text-sm">
-                  No contributors match &quot;{search}&quot;
-                </td>
-              </tr>
-            ) : (
-              filtered.map((c, i) => (
-                <tr key={c.login} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
-                  <td className="py-2.5 pr-4 text-muted-foreground">{i + 1}</td>
-                  <td className="py-2.5 pr-4 font-medium">{c.login ?? "(unknown)"}</td>
-                  <td className="py-2.5 pr-4 text-right">{c.commits}</td>
-                  <td className="py-2.5 pr-4 text-right text-green-600">+{c.linesAdded.toLocaleString()}</td>
-                  <td className="py-2.5 text-right text-red-500">-{c.linesRemoved.toLocaleString()}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+        <div className="space-y-2">
+          {filtered.map((c, i) => {
+            const barPct = Math.round((c.commits / maxCommits) * 100);
+            const color = ROW_COLORS[i % ROW_COLORS.length];
+            return (
+              <div key={c.login} className="flex items-center gap-3 rounded-lg px-3 py-2.5 hover:bg-muted/40 transition-colors group">
+                {/* Rank */}
+                <span className="text-xs text-muted-foreground w-5 text-right flex-shrink-0">{i + 1}</span>
+
+                {/* Name + bar */}
+                <div className="flex-1 min-w-0 space-y-1">
+                  <span className="text-sm font-medium truncate block">{c.login ?? "(unknown)"}</span>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${barPct}%`, backgroundColor: color }}
+                      />
+                    </div>
+                    <span className="text-xs font-semibold flex-shrink-0" style={{ color }}>{c.commits} commits</span>
+                  </div>
+                </div>
+
+                {/* Lines */}
+                <div className="hidden sm:flex flex-col items-end gap-0.5 flex-shrink-0 text-xs">
+                  <span className="text-green-500 font-medium">+{c.linesAdded.toLocaleString()}</span>
+                  <span className="text-red-500 font-medium">-{c.linesRemoved.toLocaleString()}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );
