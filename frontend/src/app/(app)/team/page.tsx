@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { useRepos } from "@/hooks/useRepos";
 import { useLeaderboard, useBusFactor, useStalePRs } from "@/hooks/useAnalytics";
-import { DateRangePicker, usePresetDates } from "@/components/shared/DateRangePicker";
-import type { DatePreset } from "@/components/shared/DateRangePicker";
+import { DateRangePicker, usePresetDates, useDatePreset } from "@/components/shared/DateRangePicker";
 import { AlertTriangle } from "lucide-react";
 import { Skeleton } from "@/components/shared/Skeleton";
 import { BusFactorCard } from "./_components/BusFactorCard";
@@ -14,6 +13,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
 } from "recharts";
 
+
 const STORAGE_KEY = "team:selectedRepoId";
 
 export default function TeamPage() {
@@ -21,7 +21,7 @@ export default function TeamPage() {
   const [selectedRepoId, setSelectedRepoId] = useState<string>(
     () => (typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) ?? "" : "")
   );
-  const [preset, setPreset] = useState<DatePreset>("30d");
+  const [preset, setPreset] = useDatePreset();
   const { from, to } = usePresetDates(preset);
 
   const repoId = selectedRepoId || repos?.[0]?.id || "";
@@ -96,7 +96,9 @@ export default function TeamPage() {
                 <XAxis dataKey="login" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} allowDecimals={false} />
                 <Tooltip
-                  contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }}
+                  cursor={false}
+                  position={{ y: Math.round(chartHeight / 2) }}
+                  contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }}
                   formatter={(v: number, name: string) => [v.toLocaleString(), name === "added" ? "Lines Added" : "Lines Removed"]}
                 />
                 <Legend formatter={(v) => v === "added" ? "Lines Added" : "Lines Removed"} wrapperStyle={{ fontSize: "12px" }} />

@@ -1,52 +1,31 @@
 "use client";
 
-import { useState } from "react";
-import { useDashboard, useInsights, useAiSummary, useOverview, useCommitTrend } from "@/hooks/useAnalytics";
+import { useDashboard, useInsights, useAiSummary, useOverview, useCommitTrend, usePRLifecycle } from "@/hooks/useAnalytics";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { RecentPRsTable } from "@/components/dashboard/RecentPRsTable";
 import { InsightsPanel } from "@/components/dashboard/InsightsPanel";
-import { DateRangePicker, usePresetDates } from "@/components/shared/DateRangePicker";
-import type { DatePreset } from "@/components/shared/DateRangePicker";
+import { DateRangePicker, usePresetDates, useDatePreset } from "@/components/shared/DateRangePicker";
 import { formatHours } from "@/lib/utils";
-import { TrendingUp, GitPullRequest, Star, Code2 } from "lucide-react";
 import { AreaChart, Area, ResponsiveContainer, Tooltip, CartesianGrid, XAxis, YAxis } from "recharts";
 
 function Skeleton({ className = "" }: { className?: string }) {
   return <div className={`animate-pulse bg-muted rounded ${className}`} />;
 }
 
-function StatCard({ label, value, icon: Icon, isLoading }: {
-  label: string; value: string | number; icon: React.ElementType; isLoading: boolean;
-}) {
-  return (
-    <div className="bg-card border border-border rounded-xl p-5 flex items-center gap-4">
-      <div className="p-2 bg-primary/10 rounded-lg">
-        <Icon className="w-5 h-5 text-primary" />
-      </div>
-      <div>
-        <div className="text-xs text-muted-foreground">{label}</div>
-        {isLoading ? (
-          <Skeleton className="h-7 w-16 mt-1" />
-        ) : (
-          <div className="text-2xl font-bold">{value}</div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 export default function DashboardPage() {
-  const [preset, setPreset] = useState<DatePreset>("30d");
+  const [preset, setPreset] = useDatePreset();
   const { from, to } = usePresetDates(preset);
 
   const { data, isLoading, error } = useDashboard();
   const { data: overview, isLoading: overviewLoading } = useOverview(from, to);
+  const { data: lifecycle, isLoading: lifecycleLoading } = usePRLifecycle(from, to);
   const { data: insights, isLoading: insightsLoading } = useInsights(undefined, from, to);
   const { data: aiSummary, isLoading: aiLoading } = useAiSummary(undefined, from, to);
   const { data: trendData, isLoading: trendLoading } = useCommitTrend(from, to, "daily");
 
   const sparkData = (trendData ?? []).map((p: { date: string; count: number }) => ({
     date: new Date(p.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    fullDate: new Date(p.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
     commits: p.count,
   }));
 
@@ -63,13 +42,57 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
-          {/* Period overview */}
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-            <StatCard label="Commits" value={overview?.commits ?? 0} icon={TrendingUp} isLoading={overviewLoading} />
-            <StatCard label="PRs Authored" value={overview?.prsAuthored ?? 0} icon={GitPullRequest} isLoading={overviewLoading} />
-            <StatCard label="Reviews Given" value={overview?.reviewsGiven ?? 0} icon={Star} isLoading={overviewLoading} />
-            <StatCard label="Lines Added" value={(overview?.linesAdded ?? 0).toLocaleString()} icon={Code2} isLoading={overviewLoading} />
-            <StatCard label="Lines Removed" value={(overview?.linesRemoved ?? 0).toLocaleString()} icon={Code2} isLoading={overviewLoading} />
+          {/* Metric cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Streak — always from all-time dashboard data */}
+            <div className="bg-card border border-border rounded-xl p-6 flex items-center gap-4">
+              {isLoading ? <Skeleton className="w-16 h-16 rounded-full flex-shrink-0" /> : (() => {
+                const streak = data?.currentStreak ?? 0;
+                const pct = Math.min(streak / 30, 1);
+                const r = 24, circ = 2 * Math.PI * r;
+                return (
+                  <div className="relative flex-shrink-0 w-16 h-16">
+                    <svg width="64" height="64" viewBox="0 0 64 64" className="-rotate-90">
+                      <circle cx="32" cy="32" r={r} fill="none" stroke="hsl(var(--muted))" strokeWidth="5" />
+                      <circle cx="32" cy="32" r={r} fill="none" stroke="#f97316" strokeWidth="5"
+                        strokeDasharray={circ} strokeDashoffset={circ * (1 - pct)}
+                        strokeLinecap="round" style={{ transition: "stroke-dashoffset 0.5s ease" }}
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-lg">🔥</span>
+                    </div>
+                  </div>
+                );
+              })()}
+              <div>
+                <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Contribution Streak</div>
+                {isLoading ? <Skeleton className="h-8 w-16 mt-1" /> : (
+                  <div className="text-3xl font-bold">{data?.currentStreak ?? 0} <span className="text-base font-normal text-muted-foreground">days</span></div>
+                )}
+              </div>
+            </div>
+
+            {/* Commits this week — always from dashboard */}
+            {isLoading ? (
+              <div className="bg-card border border-border rounded-xl p-6"><Skeleton className="h-4 w-28 mb-3" /><Skeleton className="h-8 w-20" /></div>
+            ) : (
+              <MetricCard label="Commits This Week" value={data?.weeklyCommits ?? 0} />
+            )}
+
+            {/* PRs Merged — from selected period lifecycle data */}
+            {lifecycleLoading ? (
+              <div className="bg-card border border-border rounded-xl p-6"><Skeleton className="h-4 w-28 mb-3" /><Skeleton className="h-8 w-20" /></div>
+            ) : (
+              <MetricCard label="PRs Merged" value={lifecycle?.mergedCount ?? 0} sublabel="in selected period" />
+            )}
+
+            {/* Avg Merge Time — from selected period lifecycle data */}
+            {lifecycleLoading ? (
+              <div className="bg-card border border-border rounded-xl p-6"><Skeleton className="h-4 w-28 mb-3" /><Skeleton className="h-8 w-20" /></div>
+            ) : (
+              <MetricCard label="Avg Merge Time" value={formatHours(lifecycle?.avgHoursToMerge ?? 0)} sublabel="in selected period" />
+            )}
           </div>
 
           {/* Commit Activity Chart */}
@@ -94,7 +117,7 @@ export default function DashboardPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis dataKey="date" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
                   <YAxis tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} allowDecimals={false} />
-                  <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} formatter={(v: number) => [v, "commits"]} labelFormatter={(l: string) => l} />
+                  <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} formatter={(v: number) => [v, "commits"]} labelFormatter={(_, payload) => payload?.[0]?.payload?.fullDate ?? ""} />
                   <Area type="monotone" dataKey="commits" stroke="hsl(var(--primary))" strokeWidth={2} fill="url(#sparkGradient)" dot={false} />
                 </AreaChart>
               </ResponsiveContainer>
@@ -133,66 +156,29 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* All-time metric cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {isLoading ? (
-              [...Array(4)].map((_, i) => (
-                <div key={i} className="bg-card border border-border rounded-xl p-6">
-                  <Skeleton className="h-4 w-28 mb-3" />
-                  <Skeleton className="h-8 w-20" />
-                </div>
-              ))
-            ) : (
-              <>
-                <div className="bg-card border border-border rounded-xl p-6 flex items-center gap-4">
-                  {/* SVG streak ring */}
-                  {(() => {
-                    const streak = data?.currentStreak ?? 0;
-                    const target = 30; // goal: 30-day streak
-                    const pct = Math.min(streak / target, 1);
-                    const r = 24, circ = 2 * Math.PI * r;
-                    return (
-                      <div className="relative flex-shrink-0 w-16 h-16">
-                        <svg width="64" height="64" viewBox="0 0 64 64" className="-rotate-90">
-                          <circle cx="32" cy="32" r={r} fill="none" stroke="hsl(var(--muted))" strokeWidth="5" />
-                          <circle cx="32" cy="32" r={r} fill="none" stroke="#f97316" strokeWidth="5"
-                            strokeDasharray={circ} strokeDashoffset={circ * (1 - pct)}
-                            strokeLinecap="round" style={{ transition: "stroke-dashoffset 0.5s ease" }}
-                          />
-                        </svg>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="text-lg">🔥</span>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                  <div>
-                    <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Contribution Streak</div>
-                    <div className="text-3xl font-bold">{data?.currentStreak ?? 0} <span className="text-base font-normal text-muted-foreground">days</span></div>
-                  </div>
-                </div>
-                <MetricCard label="Commits This Week" value={data?.weeklyCommits ?? 0} />
-                <MetricCard label="PRs Merged (30d)" value={data?.monthlyPRsMerged ?? 0} />
-                <MetricCard label="Avg Merge Time" value={formatHours(data?.avgMergeTimeHours ?? 0)} />
-              </>
-            )}
-          </div>
-
           {/* AI Summary card */}
           {aiLoading ? (
-            <div className="rounded-xl border border-violet-500/20 p-5">
-              <Skeleton className="h-4 w-32 mb-3" />
-              <Skeleton className="h-4 w-full mb-2" />
+            <div className="rounded-xl border border-violet-500/20 p-5 space-y-2">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-5/6" />
               <Skeleton className="h-4 w-3/4" />
             </div>
           ) : aiSummary?.aiPowered ? (
             <div className="rounded-xl border border-violet-500/30 bg-gradient-to-br from-violet-500/10 to-purple-500/5 p-5">
               <div className="flex items-center gap-2 mb-3">
-                <span className="text-violet-500 text-base">✦</span>
+                <span className="text-violet-400 text-base animate-pulse">✦</span>
                 <span className="text-xs font-semibold text-violet-500 uppercase tracking-wider">AI Coaching Summary</span>
-                <span className="text-xs text-muted-foreground ml-auto">Powered by Groq · Llama 3</span>
+                <span className="text-xs text-muted-foreground">Powered by Groq · Llama 3</span>
               </div>
-              <p className="text-sm leading-relaxed text-foreground">{aiSummary.summary}</p>
+              <div className="space-y-2">
+                {aiSummary.summary.split(/(?<=[.!?])\s+/).filter(Boolean).map((sentence, i) => (
+                  <p key={i} className="text-sm leading-relaxed text-foreground flex gap-2">
+                    <span className="text-violet-400 mt-0.5 flex-shrink-0">›</span>
+                    <span>{sentence}</span>
+                  </p>
+                ))}
+              </div>
             </div>
           ) : null}
 

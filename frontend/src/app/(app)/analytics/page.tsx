@@ -5,8 +5,7 @@ import {
   useHeatmap, usePRLifecycle, usePRSizeDistribution,
   useReviewsSummary, useCommitTrend, useOverview,
 } from "@/hooks/useAnalytics";
-import { DateRangePicker, usePresetDates } from "@/components/shared/DateRangePicker";
-import type { DatePreset } from "@/components/shared/DateRangePicker";
+import { DateRangePicker, usePresetDates, useDatePreset } from "@/components/shared/DateRangePicker";
 import { TrendingUp, GitPullRequest, Star, Code2 } from "lucide-react";
 import { StatCard } from "./_components/StatCard";
 import { CommitTrendChart } from "./_components/CommitTrendChart";
@@ -19,7 +18,7 @@ type Tab = (typeof tabs)[number];
 
 export default function AnalyticsPage() {
   const [tab, setTab] = useState<Tab>("Commits");
-  const [preset, setPreset] = useState<DatePreset>("30d");
+  const [preset, setPreset] = useDatePreset();
   const [granularity, setGranularity] = useState<"daily" | "weekly">("daily");
   const { from, to } = usePresetDates(preset);
 

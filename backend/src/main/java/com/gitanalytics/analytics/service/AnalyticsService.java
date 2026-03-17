@@ -111,10 +111,10 @@ public class AnalyticsService {
 
         for (PullRequest pr : prs) {
             int files = pr.getChangedFiles();
-            if (files < 10) buckets.merge("XS", 1L, Long::sum);
-            else if (files < 50) buckets.merge("S", 1L, Long::sum);
-            else if (files < 250) buckets.merge("M", 1L, Long::sum);
-            else if (files < 1000) buckets.merge("L", 1L, Long::sum);
+            if (files < 5) buckets.merge("XS", 1L, Long::sum);
+            else if (files < 30) buckets.merge("S", 1L, Long::sum);
+            else if (files < 101) buckets.merge("M", 1L, Long::sum);
+            else if (files < 251) buckets.merge("L", 1L, Long::sum);
             else buckets.merge("XL", 1L, Long::sum);
         }
         return new PRSizeDistributionDto(buckets);

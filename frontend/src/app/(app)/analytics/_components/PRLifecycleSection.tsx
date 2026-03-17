@@ -6,6 +6,7 @@ import {
 import { PR_SIZE_COLORS, formatHours } from "@/lib/utils";
 import { Skeleton } from "@/components/shared/Skeleton";
 
+
 interface Lifecycle {
   avgHoursToFirstReview: number;
   avgHoursToMerge: number;
@@ -59,6 +60,7 @@ export function PRLifecycleSection({ lifecycle, lifecycleLoading, sizeChartData,
           <div className="flex-shrink-0 text-center px-5 py-4 bg-blue-500/10 border border-blue-500/30 rounded-xl min-w-[120px]">
             <div className="text-3xl font-bold text-blue-500">{lifecycle?.totalCount ?? 0}</div>
             <div className="text-xs text-muted-foreground mt-1 font-medium uppercase tracking-wide">PRs Opened</div>
+            <div className="text-xs text-blue-500/70 mt-1">100%</div>
           </div>
           {/* Arrow + time */}
           <div className="flex-1 flex flex-col items-center min-w-[90px] px-3">
@@ -67,12 +69,13 @@ export function PRLifecycleSection({ lifecycle, lifecycleLoading, sizeChartData,
               <div className="h-0.5 bg-border flex-1" />
               <svg width="12" height="12" viewBox="0 0 12 12" className="text-muted-foreground flex-shrink-0"><path d="M1 6h9M7 2l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/></svg>
             </div>
-            <div className="text-xs text-muted-foreground mt-1">to 1st review</div>
+            <div className="text-xs text-muted-foreground mt-1">wait for review</div>
           </div>
           {/* Stage 2 */}
           <div className="flex-shrink-0 text-center px-5 py-4 bg-violet-500/10 border border-violet-500/30 rounded-xl min-w-[120px]">
             <div className="text-3xl font-bold text-violet-500">{lifecycle?.totalCount ?? 0}</div>
-            <div className="text-xs text-muted-foreground mt-1 font-medium uppercase tracking-wide">Reviewed</div>
+            <div className="text-xs text-muted-foreground mt-1 font-medium uppercase tracking-wide">In Review</div>
+            <div className="text-xs text-violet-500/70 mt-1">avg {formatHours(lifecycle?.avgHoursToFirstReview ?? 0)} wait</div>
           </div>
           {/* Arrow + time */}
           <div className="flex-1 flex flex-col items-center min-w-[90px] px-3">
@@ -81,22 +84,31 @@ export function PRLifecycleSection({ lifecycle, lifecycleLoading, sizeChartData,
               <div className="h-0.5 bg-border flex-1" />
               <svg width="12" height="12" viewBox="0 0 12 12" className="text-muted-foreground flex-shrink-0"><path d="M1 6h9M7 2l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/></svg>
             </div>
-            <div className="text-xs text-muted-foreground mt-1">to merge</div>
+            <div className="text-xs text-muted-foreground mt-1">review → merge</div>
           </div>
           {/* Stage 3 */}
           <div className="flex-shrink-0 text-center px-5 py-4 bg-green-500/10 border border-green-500/30 rounded-xl min-w-[120px]">
             <div className="text-3xl font-bold text-green-500">{lifecycle?.mergedCount ?? 0}</div>
             <div className="text-xs text-muted-foreground mt-1 font-medium uppercase tracking-wide">Merged</div>
+            {lifecycle && lifecycle.totalCount > 0 && (
+              <div className="text-xs text-green-500/70 mt-1">{Math.round((lifecycle.mergedCount / lifecycle.totalCount) * 100)}% of opened</div>
+            )}
           </div>
         </div>
 
-        {/* Merge rate progress bar */}
+        {/* Merge rate + bottleneck insight */}
         {lifecycle && lifecycle.totalCount > 0 && (() => {
           const rate = Math.round((lifecycle.mergedCount / lifecycle.totalCount) * 100);
           const barColor = rate >= 75 ? "bg-green-500" : rate >= 40 ? "bg-yellow-500" : "bg-red-500";
           const textColor = rate >= 75 ? "text-green-600" : rate >= 40 ? "text-yellow-600" : "text-red-500";
+          const reviewWait = lifecycle.avgHoursToFirstReview;
+          const reviewToMerge = Math.max(lifecycle.avgHoursToMerge - lifecycle.avgHoursToFirstReview, 0);
+          const bottleneck = reviewWait > reviewToMerge
+            ? `Review wait (${formatHours(reviewWait)}) is the bottleneck — ${Math.round(reviewWait / Math.max(reviewToMerge, 0.1))}× longer than merge stage`
+            : `Merge stage (${formatHours(reviewToMerge)}) takes longer than review wait (${formatHours(reviewWait)})`;
+          const notMerged = lifecycle.totalCount - lifecycle.mergedCount;
           return (
-            <div className="mt-5 pt-4 border-t border-border space-y-2">
+            <div className="mt-5 pt-4 border-t border-border space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Merge Rate</span>
                 <span className={`font-semibold ${textColor}`}>{rate}% merged</span>
@@ -104,9 +116,14 @@ export function PRLifecycleSection({ lifecycle, lifecycleLoading, sizeChartData,
               <div className="h-2 bg-muted rounded-full overflow-hidden">
                 <div className={`h-full ${barColor} rounded-full transition-all duration-500`} style={{ width: `${rate}%` }} />
               </div>
-              <div className="text-xs text-muted-foreground">
-                {lifecycle.mergedCount} of {lifecycle.totalCount} PRs merged · avg {formatHours(lifecycle.avgHoursToMerge)} total time to merge
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <span>{lifecycle.mergedCount} merged · {notMerged} not merged · avg {formatHours(lifecycle.avgHoursToMerge)} total</span>
               </div>
+              {reviewWait > 0 && reviewToMerge > 0 && (
+                <div className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
+                  <span className="text-foreground font-medium">Bottleneck: </span>{bottleneck}
+                </div>
+              )}
             </div>
           );
         })()}
@@ -127,7 +144,14 @@ export function PRLifecycleSection({ lifecycle, lifecycleLoading, sizeChartData,
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="name" tick={{ fontSize: 12 }} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
+                <Tooltip
+                  cursor={false}
+                  position={{ y: 80 }}
+                  contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }}
+                  labelStyle={{ color: "hsl(var(--foreground))", fontWeight: 500 }}
+                  itemStyle={{ color: "hsl(var(--muted-foreground))" }}
+                  formatter={(v: number) => [v, "PRs"]}
+                />
                 <Bar dataKey="count" radius={[4, 4, 0, 0]}>
                   {sizeChartData.map((entry) => (
                     <Cell key={entry.name} fill={PR_SIZE_COLORS[entry.name] ?? "#6366f1"} />
@@ -135,8 +159,8 @@ export function PRLifecycleSection({ lifecycle, lifecycleLoading, sizeChartData,
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-            <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
-              <span>XS: &lt;10 files</span><span>S: 10-49</span><span>M: 50-249</span><span>L: 250-999</span><span>XL: 1000+</span>
+            <div className="flex gap-4 mt-2 text-xs text-muted-foreground justify-center">
+              <span>XS: &lt;5 files</span><span>S: 5-29</span><span>M: 30-100</span><span>L: 101-250</span><span>XL: 250+</span>
             </div>
           </>
         )}

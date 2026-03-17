@@ -1,7 +1,19 @@
 "use client";
 
 import { subDays, subMonths, subYears, formatISO } from "date-fns";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+
+const DATE_PRESET_KEY = "global:datePreset";
+
+export function useDatePreset(): [DatePreset, (p: DatePreset) => void] {
+  const [preset, setPreset] = useState<DatePreset>(() =>
+    (typeof window !== "undefined" ? (localStorage.getItem(DATE_PRESET_KEY) as DatePreset) : null) ?? "30d"
+  );
+  return [preset, (p: DatePreset) => {
+    setPreset(p);
+    if (typeof window !== "undefined") localStorage.setItem(DATE_PRESET_KEY, p);
+  }];
+}
 
 const PRESETS = [
   { label: "7d",  getDays: () => subDays(new Date(), 7) },
