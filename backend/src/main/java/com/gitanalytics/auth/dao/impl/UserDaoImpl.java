@@ -1,5 +1,6 @@
-package com.gitanalytics.auth.dao;
+package com.gitanalytics.auth.dao.impl;
 
+import com.gitanalytics.auth.dao.UserDao;
 import com.gitanalytics.auth.entity.User;
 import com.gitanalytics.auth.repository.UserRepository;
 import lombok.RequiredArgsConstructor;

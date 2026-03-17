@@ -1,5 +1,6 @@
-package com.gitanalytics.ingestion.dao;
+package com.gitanalytics.ingestion.dao.impl;
 
+import com.gitanalytics.ingestion.dao.ReleaseDao;
 import com.gitanalytics.ingestion.entity.Release;
 import com.gitanalytics.ingestion.repository.ReleaseRepository;
 import lombok.RequiredArgsConstructor;

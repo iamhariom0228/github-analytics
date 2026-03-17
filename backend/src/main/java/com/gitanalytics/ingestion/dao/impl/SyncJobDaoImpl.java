@@ -1,5 +1,6 @@
-package com.gitanalytics.ingestion.dao;
+package com.gitanalytics.ingestion.dao.impl;
 
+import com.gitanalytics.ingestion.dao.SyncJobDao;
 import com.gitanalytics.ingestion.entity.SyncJob;
 import com.gitanalytics.ingestion.repository.SyncJobRepository;
 import lombok.RequiredArgsConstructor;

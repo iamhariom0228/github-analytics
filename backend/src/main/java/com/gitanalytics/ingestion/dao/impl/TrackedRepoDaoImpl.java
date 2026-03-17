@@ -1,5 +1,6 @@
-package com.gitanalytics.ingestion.dao;
+package com.gitanalytics.ingestion.dao.impl;
 
+import com.gitanalytics.ingestion.dao.TrackedRepoDao;
 import com.gitanalytics.ingestion.entity.TrackedRepo;
 import com.gitanalytics.ingestion.repository.TrackedRepoRepository;
 import lombok.RequiredArgsConstructor;

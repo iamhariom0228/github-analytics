@@ -1,5 +1,6 @@
-package com.gitanalytics.ingestion.dao;
+package com.gitanalytics.ingestion.dao.impl;
 
+import com.gitanalytics.ingestion.dao.PrReviewDao;
 import com.gitanalytics.ingestion.entity.PrReview;
 import com.gitanalytics.ingestion.repository.PrReviewRepository;
 import lombok.RequiredArgsConstructor;

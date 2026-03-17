@@ -1,5 +1,6 @@
-package com.gitanalytics.ingestion.dao;
+package com.gitanalytics.ingestion.dao.impl;
 
+import com.gitanalytics.ingestion.dao.CommitDao;
 import com.gitanalytics.ingestion.entity.Commit;
 import com.gitanalytics.ingestion.repository.CommitRepository;
 import lombok.RequiredArgsConstructor;
@@ -32,7 +33,7 @@ public class CommitDaoImpl implements CommitDao {
 
     @Override
     public List<Commit> findByUserAndAuthorAndDateRange(UUID userId, String login,
-                                                         OffsetDateTime from, OffsetDateTime to) {
+                                                        OffsetDateTime from, OffsetDateTime to) {
         return commitRepository.findByUserAndAuthorAndDateRange(userId, login, from, to);
     }
 

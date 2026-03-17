@@ -1,5 +1,6 @@
-package com.gitanalytics.ingestion.dao;
+package com.gitanalytics.ingestion.dao.impl;
 
+import com.gitanalytics.ingestion.dao.PullRequestDao;
 import com.gitanalytics.ingestion.entity.PullRequest;
 import com.gitanalytics.ingestion.repository.PullRequestRepository;
 import lombok.RequiredArgsConstructor;
@@ -28,7 +29,7 @@ public class PullRequestDaoImpl implements PullRequestDao {
 
     @Override
     public List<PullRequest> findByUserAndAuthorAndDateRange(UUID userId, String login,
-                                                              OffsetDateTime from, OffsetDateTime to) {
+                                                             OffsetDateTime from, OffsetDateTime to) {
         return pullRequestRepository.findByUserAndAuthorAndDateRange(userId, login, from, to);
     }
 
