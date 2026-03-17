@@ -1,22 +1,22 @@
 package com.gitanalytics.analytics;
 
+import com.gitanalytics.analytics.dao.AnalyticsDao;
 import com.gitanalytics.analytics.dto.*;
 import com.gitanalytics.analytics.service.AnalyticsService;
+import com.gitanalytics.auth.dao.UserDao;
 import com.gitanalytics.auth.entity.User;
-import com.gitanalytics.auth.repository.UserRepository;
+import com.gitanalytics.ingestion.dao.PullRequestDao;
+import com.gitanalytics.ingestion.dao.ReleaseDao;
+import com.gitanalytics.ingestion.dao.TrackedRepoDao;
 import com.gitanalytics.ingestion.entity.PullRequest;
-import com.gitanalytics.ingestion.entity.TrackedRepo;
-import com.gitanalytics.ingestion.repository.*;
-import jakarta.persistence.EntityManager;
+import com.gitanalytics.shared.client.GroqApiClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import com.gitanalytics.shared.client.GroqApiClient;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
@@ -31,13 +31,11 @@ import static org.mockito.Mockito.*;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class AnalyticsServiceTest {
 
-    @Mock private EntityManager em;
-    @Mock private UserRepository userRepository;
-    @Mock private CommitRepository commitRepository;
-    @Mock private PullRequestRepository pullRequestRepository;
-    @Mock private PrReviewRepository prReviewRepository;
-    @Mock private ReleaseRepository releaseRepository;
-    @Mock private TrackedRepoRepository trackedRepoRepository;
+    @Mock private AnalyticsDao analyticsDao;
+    @Mock private UserDao userDao;
+    @Mock private PullRequestDao pullRequestDao;
+    @Mock private ReleaseDao releaseDao;
+    @Mock private TrackedRepoDao trackedRepoDao;
     @Mock private RedisTemplate<String, Object> redisTemplate;
     @Mock private ValueOperations<String, Object> valueOps;
     @Mock private GroqApiClient groqApiClient;
@@ -47,16 +45,7 @@ class AnalyticsServiceTest {
     @BeforeEach
     void setUp() {
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
-        service = new AnalyticsService(userRepository, commitRepository, pullRequestRepository,
-            prReviewRepository, releaseRepository, trackedRepoRepository, redisTemplate, groqApiClient);
-        // inject EntityManager via reflection (it's @PersistenceContext)
-        try {
-            var field = AnalyticsService.class.getDeclaredField("em");
-            field.setAccessible(true);
-            field.set(service, em);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        service = new AnalyticsService(analyticsDao, userDao, pullRequestDao, releaseDao, trackedRepoDao, redisTemplate, groqApiClient);
     }
 
     // ---------- PR Size Distribution ----------
@@ -64,9 +53,8 @@ class AnalyticsServiceTest {
     @Test
     void getPRSizeDistribution_bucketsCorrectly() {
         User user = user();
-        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
-
-        List<PullRequest> prs = List.of(
+        when(userDao.findById(user.getId())).thenReturn(Optional.of(user));
+        when(pullRequestDao.findByUserAndAuthorAndDateRange(any(), any(), any(), any())).thenReturn(List.of(
             pr(5),   // XS
             pr(9),   // XS
             pr(15),  // S
@@ -74,9 +62,7 @@ class AnalyticsServiceTest {
             pr(100), // M
             pr(300), // L
             pr(1500) // XL
-        );
-        when(pullRequestRepository.findByUserAndAuthorAndDateRange(any(), any(), any(), any()))
-            .thenReturn(prs);
+        ));
 
         PRSizeDistributionDto result = service.getPRSizeDistribution(
             user.getId(), OffsetDateTime.now().minusDays(30), OffsetDateTime.now());
@@ -91,8 +77,8 @@ class AnalyticsServiceTest {
     @Test
     void getPRSizeDistribution_emptyList_returnsZeroBuckets() {
         User user = user();
-        when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
-        when(pullRequestRepository.findByUserAndAuthorAndDateRange(any(), any(), any(), any()))
+        when(userDao.findById(user.getId())).thenReturn(Optional.of(user));
+        when(pullRequestDao.findByUserAndAuthorAndDateRange(any(), any(), any(), any()))
             .thenReturn(Collections.emptyList());
 
         PRSizeDistributionDto result = service.getPRSizeDistribution(
@@ -106,10 +92,8 @@ class AnalyticsServiceTest {
     @Test
     void getBusFactor_singleContributor_returns100Percent() {
         UUID repoId = UUID.randomUUID();
-        List<Object[]> rows = new ArrayList<>();
-        rows.add(new Object[]{"alice", 50L});
-        var q = mockQuery(rows);
-        when(em.createNativeQuery(anyString())).thenReturn(q);
+        List<Object[]> rows = Collections.singletonList(new Object[]{"alice", 50L});
+        when(analyticsDao.getBusFactorRows(any(), eq(repoId))).thenReturn(rows);
 
         BusFactorDto result = service.getBusFactor(UUID.randomUUID(), repoId);
 
@@ -121,12 +105,10 @@ class AnalyticsServiceTest {
     @Test
     void getBusFactor_multipleContributors_calculatesPercentage() {
         UUID repoId = UUID.randomUUID();
-        List<Object[]> rows = List.of(
-            new Object[]{"alice", 60L},
-            new Object[]{"bob", 40L}
-        );
-        var q = mockQuery(rows);
-        when(em.createNativeQuery(anyString())).thenReturn(q);
+        List<Object[]> rows = new ArrayList<>();
+        rows.add(new Object[]{"alice", 60L});
+        rows.add(new Object[]{"bob", 40L});
+        when(analyticsDao.getBusFactorRows(any(), eq(repoId))).thenReturn(rows);
 
         BusFactorDto result = service.getBusFactor(UUID.randomUUID(), repoId);
 
@@ -137,8 +119,8 @@ class AnalyticsServiceTest {
 
     @Test
     void getBusFactor_noCommits_returnsDefaults() {
-        var q = mockQuery(Collections.emptyList());
-        when(em.createNativeQuery(anyString())).thenReturn(q);
+        List<Object[]> empty = Collections.emptyList();
+        when(analyticsDao.getBusFactorRows(any(), any())).thenReturn(empty);
 
         BusFactorDto result = service.getBusFactor(UUID.randomUUID(), UUID.randomUUID());
 
@@ -159,21 +141,21 @@ class AnalyticsServiceTest {
 
         assertThat(result.getWeeklyCommits()).isEqualTo(42L);
         assertThat(result.getCurrentStreak()).isEqualTo(7);
-        verifyNoInteractions(userRepository);
+        verifyNoInteractions(userDao);
     }
 
     // ---------- Stale PRs ----------
 
     @Test
-    void getStalePRs_delegatesToRepository() {
+    void getStalePRs_delegatesToDao() {
         UUID userId = UUID.randomUUID();
         UUID repoId = UUID.randomUUID();
-        when(pullRequestRepository.findStalePRs(eq(repoId), any())).thenReturn(Collections.emptyList());
+        when(pullRequestDao.findStalePRs(eq(repoId), any())).thenReturn(Collections.emptyList());
 
         List<PrSummaryDto> result = service.getStalePRs(userId, repoId, 7);
 
         assertThat(result).isEmpty();
-        verify(pullRequestRepository).findStalePRs(eq(repoId), any(OffsetDateTime.class));
+        verify(pullRequestDao).findStalePRs(eq(repoId), any(OffsetDateTime.class));
     }
 
     // ---------- Helpers ----------
@@ -196,13 +178,5 @@ class AnalyticsServiceTest {
             .changedFiles(changedFiles)
             .createdAt(OffsetDateTime.now().minusDays(1))
             .build();
-    }
-
-    @SuppressWarnings("unchecked")
-    private jakarta.persistence.Query mockQuery(List<?> results) {
-        // Use RETURNS_SELF so setParameter(name, value) returns the query without explicit stubbing
-        jakarta.persistence.Query q = mock(jakarta.persistence.Query.class, Mockito.RETURNS_SELF);
-        when(q.getResultList()).thenReturn((List<Object>) results);
-        return q;
     }
 }
