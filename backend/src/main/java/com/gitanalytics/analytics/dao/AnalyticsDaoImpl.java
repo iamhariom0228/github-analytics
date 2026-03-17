@@ -24,8 +24,6 @@ public class AnalyticsDaoImpl implements AnalyticsDao {
     @SuppressWarnings("unchecked")
     public List<HeatmapCellDto> getCommitHeatmap(UUID userId, String timezone, UUID repoId,
                                                    OffsetDateTime from, OffsetDateTime to) {
-        String repoFilter = repoId != null ? "AND r.id = :repoId" : "";
-        String dateFilter = (from != null && to != null) ? "AND c.committed_at BETWEEN :from AND :to" : "";
         String sql = """
             SELECT CAST(EXTRACT(DOW FROM c.committed_at AT TIME ZONE :tz) AS int) AS day,
                    CAST(EXTRACT(HOUR FROM c.committed_at AT TIME ZONE :tz) AS int) AS hour,
@@ -34,7 +32,10 @@ public class AnalyticsDaoImpl implements AnalyticsDao {
             JOIN tracked_repos r ON c.repo_id = r.id
             WHERE r.user_id = :userId
               AND c.author_login = (SELECT username FROM users WHERE id = :userId)
-            """ + repoFilter + " " + dateFilter + """
+            """
+            + (repoId != null ? "AND r.id = :repoId\n" : "")
+            + (from != null && to != null ? "AND c.committed_at BETWEEN :from AND :to\n" : "")
+            + """
             GROUP BY day, hour
             ORDER BY day, hour
             """;
