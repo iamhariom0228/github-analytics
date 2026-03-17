@@ -19,7 +19,7 @@ export function LeaderboardTable({ leaderboard, isLoading }: Props) {
   const [search, setSearch] = useState("");
 
   const filtered = leaderboard?.filter((c) =>
-    c.login.toLowerCase().includes(search.toLowerCase())
+    (c.login ?? "").toLowerCase().includes(search.toLowerCase())
   ) ?? [];
 
   return (
@@ -63,7 +63,7 @@ export function LeaderboardTable({ leaderboard, isLoading }: Props) {
               filtered.map((c, i) => (
                 <tr key={c.login} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                   <td className="py-2.5 pr-4 text-muted-foreground">{i + 1}</td>
-                  <td className="py-2.5 pr-4 font-medium">{c.login}</td>
+                  <td className="py-2.5 pr-4 font-medium">{c.login ?? "(unknown)"}</td>
                   <td className="py-2.5 pr-4 text-right">{c.commits}</td>
                   <td className="py-2.5 pr-4 text-right text-green-600">+{c.linesAdded.toLocaleString()}</td>
                   <td className="py-2.5 text-right text-red-500">-{c.linesRemoved.toLocaleString()}</td>
