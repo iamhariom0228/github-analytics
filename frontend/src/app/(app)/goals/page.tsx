@@ -73,16 +73,14 @@ function GoalRow({ label, icon, current, target, unit, color, onEdit }: GoalRowP
       <div className="flex items-start justify-between gap-3 mb-4">
         <div className="flex items-center gap-3">
           <span className="text-2xl">{icon}</span>
-          <div>
-            <div className="font-semibold text-sm flex items-center gap-2">
-              {label}
-              {done && (
-                <span className="inline-flex items-center gap-1 bg-green-500/15 text-green-600 text-xs font-medium px-2 py-0.5 rounded-full">
-                  <Trophy className="w-3 h-3" /> Goal met!
-                </span>
-              )}
-            </div>
+          <div className="min-w-0">
+            <div className="font-semibold text-sm">{label}</div>
             <div className="text-xs text-muted-foreground mt-0.5">{format(new Date(), "MMMM")} target</div>
+            {done && (
+              <span className="inline-flex items-center gap-1 bg-green-500/15 text-green-600 text-xs font-medium px-2 py-0.5 rounded-full mt-1.5 w-fit">
+                <Trophy className="w-3 h-3" /> Goal met!
+              </span>
+            )}
           </div>
         </div>
 
