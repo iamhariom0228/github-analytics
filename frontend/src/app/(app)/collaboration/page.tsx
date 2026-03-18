@@ -13,6 +13,7 @@ const RANGES = [
   { label: "Last 90 days", from: () => subDays(new Date(), 90) },
   { label: "Last 6 months", from: () => subMonths(new Date(), 6) },
   { label: "This year", from: () => new Date(new Date().getFullYear(), 0, 1) },
+  { label: "All time", from: () => new Date(2000, 0, 1) },
 ];
 
 function Skeleton({ className = "" }: { className?: string }) {

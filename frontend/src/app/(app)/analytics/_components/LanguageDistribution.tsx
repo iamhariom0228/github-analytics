@@ -2,10 +2,11 @@
 
 import { useMemo } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import type { Repo } from "@/types";
+import type { Repo, RepoLanguageStat } from "@/types";
 
 interface Props {
   repos: Repo[];
+  byteStats?: RepoLanguageStat[];
 }
 
 const PALETTE = [
@@ -45,8 +46,18 @@ interface LangStat {
   color: string;
 }
 
-export function LanguageDistribution({ repos }: Props) {
+export function LanguageDistribution({ repos, byteStats }: Props) {
   const stats = useMemo<LangStat[]>(() => {
+    // Prefer byte-based stats when available
+    if (byteStats && byteStats.length > 0) {
+      const totalBytes = byteStats.reduce((sum, s) => sum + s.bytes, 0) || 1;
+      return byteStats.map((s, idx) => ({
+        language: s.language,
+        count: s.bytes,
+        pct: Math.round((s.bytes / totalBytes) * 100),
+        color: getColor(s.language, idx),
+      }));
+    }
     const map: Record<string, number> = {};
     for (const repo of repos) {
       const lang = repo.language ?? "Unknown";
@@ -61,7 +72,7 @@ export function LanguageDistribution({ repos }: Props) {
         pct: Math.round((count / total) * 100),
         color: getColor(language, idx),
       }));
-  }, [repos]);
+  }, [repos, byteStats]);
 
   if (repos.length === 0) {
     return (
@@ -74,10 +85,15 @@ export function LanguageDistribution({ repos }: Props) {
   const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: { payload: LangStat }[] }) => {
     if (!active || !payload?.length) return null;
     const { language, count, pct } = payload[0].payload;
+    const displayCount = byteStats && byteStats.length > 0
+      ? count > 1024 * 1024
+        ? `${(count / (1024 * 1024)).toFixed(1)} MB`
+        : `${(count / 1024).toFixed(1)} KB`
+      : `${count} repo${count !== 1 ? "s" : ""}`;
     return (
       <div className="bg-card border border-border text-foreground text-xs px-3 py-2 rounded-lg shadow-lg">
         <div className="font-semibold">{language}</div>
-        <div className="text-muted-foreground mt-0.5">{count} repo{count !== 1 ? "s" : ""} · {pct}%</div>
+        <div className="text-muted-foreground mt-0.5">{displayCount} · {pct}%</div>
       </div>
     );
   };
@@ -122,7 +138,9 @@ export function LanguageDistribution({ repos }: Props) {
                 />
               </div>
               <span className="text-xs text-muted-foreground w-16 text-right shrink-0">
-                {s.count} repo{s.count !== 1 ? "s" : ""} · {s.pct}%
+                {byteStats && byteStats.length > 0
+                  ? `${s.pct}%`
+                  : `${s.count} repo${s.count !== 1 ? "s" : ""} · ${s.pct}%`}
               </span>
             </div>
           ))}

@@ -50,6 +50,14 @@ import type {
   PublicRepoStats,
   PRMergeRatePoint,
   ReviewerCoverage,
+  StarsForksSnapshot,
+  ReleaseTrendPoint,
+  IssueAnalytics,
+  RepoLanguageStat,
+  RepoCompare,
+  ContributorCompare,
+  ShareSnapshot,
+  CreateShareResponse,
 } from "@/types";
 import type { ApiResponse } from "@/types";
 
@@ -60,7 +68,7 @@ export const getMe = () =>
   apiClient.get<ApiResponse<UserProfile>>("/auth/me").then(unwrap);
 
 export const logout = () =>
-  apiClient.post<ApiResponse<void>>("/auth/logout").then(unwrap);
+  axios.post("/api/auth/logout").then(() => undefined);
 
 // Repos
 export const getRepos = () =>
@@ -224,3 +232,51 @@ export const getChurnLeaderboard = (repoId: string, from: string, to: string) =>
   apiClient
     .get<ApiResponse<ContributorStats[]>>("/analytics/team/churn", { params: { repoId, from, to } })
     .then(unwrap);
+
+// Stars & Forks Trend
+export const getStarsForksTrend = (repoId: string) =>
+  apiClient
+    .get<ApiResponse<StarsForksSnapshot[]>>(`/analytics/repos/${repoId}/stars-forks-trend`)
+    .then(unwrap);
+
+// Release Trend
+export const getReleaseTrend = (repoId: string) =>
+  apiClient
+    .get<ApiResponse<ReleaseTrendPoint[]>>(`/analytics/repos/${repoId}/release-trend`)
+    .then(unwrap);
+
+// Issue Analytics
+export const getIssueAnalytics = (repoId: string) =>
+  apiClient
+    .get<ApiResponse<IssueAnalytics>>(`/analytics/repos/${repoId}/issues`)
+    .then(unwrap);
+
+// Language Bytes
+export const getLanguageBytes = (repoId: string) =>
+  apiClient
+    .get<ApiResponse<RepoLanguageStat[]>>(`/analytics/repos/${repoId}/language-bytes`)
+    .then(unwrap);
+
+// Compare Two Repos
+export const compareRepos = (repoIds: string[]) =>
+  apiClient
+    .get<ApiResponse<RepoCompare[]>>("/analytics/compare/repos", { params: { repoIds: repoIds.join(",") } })
+    .then(unwrap);
+
+// Compare Two Contributors
+export const compareContributors = (logins: string[]) =>
+  apiClient
+    .get<ApiResponse<ContributorCompare[]>>("/analytics/compare/contributors", { params: { logins: logins.join(",") } })
+    .then(unwrap);
+
+// Share Snapshot
+export const createShare = (timezone?: string, from?: string, to?: string) =>
+  apiClient
+    .post<ApiResponse<CreateShareResponse>>("/analytics/share", null, { params: { timezone, from, to } })
+    .then(unwrap);
+
+// Get Public Share
+export const getPublicShare = (token: string) =>
+  axios
+    .get<ApiResponse<ShareSnapshot>>(`/api/backend/public/share/${token}`)
+    .then((res) => res.data.data);

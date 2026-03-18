@@ -537,6 +537,62 @@ public class GitHubApiClient {
         }
     }
 
+    @SuppressWarnings("unchecked")
+    public Map<String, Long> getLanguages(String accessToken, UUID userId, String owner, String repo) {
+        checkRateLimit(userId);
+        try {
+            Map<String, Long> result = (Map<String, Long>) webClientBuilder.build()
+                .get()
+                .uri(GITHUB_API_BASE + "/repos/" + owner + "/" + repo + "/languages")
+                .header("Authorization", "Bearer " + accessToken)
+                .header("Accept", "application/vnd.github+json")
+                .exchangeToMono(resp -> {
+                    String remaining = resp.headers().asHttpHeaders().getFirst("X-RateLimit-Remaining");
+                    if (remaining != null) {
+                        redisTemplate.opsForValue().set("ga:ratelimit:gh:" + userId, remaining, 1, TimeUnit.HOURS);
+                    }
+                    return resp.bodyToMono(Map.class);
+                })
+                .block();
+            return result != null ? result : Map.of();
+        } catch (Exception e) {
+            log.warn("Could not fetch languages for {}/{}: {}", owner, repo, e.getMessage());
+            return Map.of();
+        }
+    }
+
+    @Data
+    public static class GitHubIssueDto {
+        @JsonProperty("number")     private Integer number;
+        @JsonProperty("title")      private String title;
+        @JsonProperty("state")      private String state;
+        @JsonProperty("created_at") private OffsetDateTime createdAt;
+        @JsonProperty("closed_at")  private OffsetDateTime closedAt;
+        @JsonProperty("user")       private GitHubPRDto.UserDto user;
+        @JsonProperty("pull_request") private Object pullRequest;
+    }
+
+    public List<GitHubIssueDto> getIssues(String accessToken, UUID userId,
+                                           String owner, String repo,
+                                           OffsetDateTime since) {
+        List<GitHubIssueDto> all = new ArrayList<>();
+        int page = 1;
+        String sinceParam = since != null ? "&since=" + since.toString() : "";
+        while (true) {
+            List<GitHubIssueDto> batch = get(
+                accessToken, userId,
+                "/repos/" + owner + "/" + repo + "/issues?state=all&per_page=" + PER_PAGE
+                    + "&page=" + page + sinceParam,
+                GitHubIssueDto.class
+            );
+            if (batch.isEmpty()) break;
+            all.addAll(batch.stream().filter(i -> i.getPullRequest() == null).toList());
+            if (batch.size() < PER_PAGE) break;
+            page++;
+        }
+        return all;
+    }
+
     @SuppressWarnings({"unchecked","rawtypes"})
     public List<GitHubReleaseDto> getReleases(String accessToken, UUID userId, String owner, String repo) {
         List<GitHubReleaseDto> all = new ArrayList<>();

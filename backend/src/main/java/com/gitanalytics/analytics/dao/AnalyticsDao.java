@@ -1,10 +1,6 @@
 package com.gitanalytics.analytics.dao;
 
-import com.gitanalytics.analytics.dto.CommitTrendDto;
-import com.gitanalytics.analytics.dto.ContributorStatsDto;
-import com.gitanalytics.analytics.dto.HeatmapCellDto;
-import com.gitanalytics.analytics.dto.PRMergeRateDto;
-import com.gitanalytics.analytics.dto.ReviewerCoverageDto;
+import com.gitanalytics.analytics.dto.*;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -86,4 +82,19 @@ public interface AnalyticsDao {
 
     // Repo commit trend
     List<CommitTrendDto> getCommitTrendByRepo(UUID repoId, OffsetDateTime from, OffsetDateTime to);
+
+    // Stars & Forks Trend
+    List<StarsForksSnapshotDto> getStarsForksTrend(UUID repoId);
+
+    // Release Trend
+    List<ReleaseTrendDto> getReleaseTrend(UUID repoId);
+
+    // Issue Analytics
+    IssueAnalyticsDto getIssueAnalytics(UUID repoId);
+
+    // Language Bytes
+    List<RepoLanguageDto> getLanguageBytes(UUID repoId);
+
+    // Contributor Compare
+    ContributorCompareDto getContributorStats(UUID userId, String login);
 }

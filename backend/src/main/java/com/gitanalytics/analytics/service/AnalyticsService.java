@@ -333,7 +333,7 @@ public class AnalyticsService {
 
     public List<PrSummaryDto> getStalePRs(UUID userId, UUID repoId, int olderThanDays) {
         OffsetDateTime threshold = OffsetDateTime.now().minusDays(olderThanDays);
-        return pullRequestDao.findStalePRs(repoId, threshold).stream()
+        return pullRequestDao.findStalePRs(userId, repoId, threshold).stream()
             .map(pr -> new PrSummaryDto(pr.getId(), pr.getPrNumber(), pr.getTitle(),
                 pr.getState().name(), pr.getCreatedAt()))
             .toList();
@@ -588,6 +588,83 @@ public class AnalyticsService {
             .filter(r -> r.getUser().getId().equals(userId))
             .orElseThrow(() -> new ResourceNotFoundException("Repository not found"));
         return analyticsDao.getCommitTrendByRepo(repoId, from, to);
+    }
+
+    // ── Stars & Forks Trend ───────────────────────────────────────────────────
+
+    public List<StarsForksSnapshotDto> getStarsForksTrend(UUID userId, UUID repoId) {
+        trackedRepoDao.findById(repoId)
+            .filter(r -> r.getUser().getId().equals(userId))
+            .orElseThrow(() -> new ResourceNotFoundException("Repository not found"));
+        return analyticsDao.getStarsForksTrend(repoId);
+    }
+
+    // ── Release Trend ─────────────────────────────────────────────────────────
+
+    public List<ReleaseTrendDto> getReleaseTrend(UUID userId, UUID repoId) {
+        trackedRepoDao.findById(repoId)
+            .filter(r -> r.getUser().getId().equals(userId))
+            .orElseThrow(() -> new ResourceNotFoundException("Repository not found"));
+        return analyticsDao.getReleaseTrend(repoId);
+    }
+
+    // ── Issue Analytics ───────────────────────────────────────────────────────
+
+    public IssueAnalyticsDto getIssueAnalytics(UUID userId, UUID repoId) {
+        trackedRepoDao.findById(repoId)
+            .filter(r -> r.getUser().getId().equals(userId))
+            .orElseThrow(() -> new ResourceNotFoundException("Repository not found"));
+        return analyticsDao.getIssueAnalytics(repoId);
+    }
+
+    // ── Language Bytes ────────────────────────────────────────────────────────
+
+    public List<RepoLanguageDto> getLanguageBytes(UUID userId, UUID repoId) {
+        trackedRepoDao.findById(repoId)
+            .filter(r -> r.getUser().getId().equals(userId))
+            .orElseThrow(() -> new ResourceNotFoundException("Repository not found"));
+        return analyticsDao.getLanguageBytes(repoId);
+    }
+
+    // ── Compare Two Repos ─────────────────────────────────────────────────────
+
+    public List<RepoCompareDto> compareRepos(UUID userId, List<UUID> repoIds) {
+        return repoIds.stream().map(repoId -> {
+            var repo = trackedRepoDao.findById(repoId)
+                .filter(r -> r.getUser().getId().equals(userId))
+                .orElseThrow(() -> new ResourceNotFoundException("Repository not found: " + repoId));
+
+            RepoHealthDto health = getRepoHealth(userId, repoId);
+            long totalCommits = analyticsDao.countCommitsByRepo(repoId);
+
+            Object[] prStats = analyticsDao.getPRStatsByRepo(repoId);
+            long totalPRs  = prStats[0] != null ? ((Number) prStats[0]).longValue() : 0;
+            long mergedPRs = prStats[1] != null ? ((Number) prStats[1]).longValue() : 0;
+            double avgMerge = prStats[2] != null ? ((Number) prStats[2]).doubleValue() : 0;
+
+            List<Object[]> topRows = analyticsDao.getTopContributorByRepo(repoId);
+            String topContributor = topRows.isEmpty() ? null : (String) topRows.get(0)[0];
+            long topCount = topRows.isEmpty() ? 0 : ((Number) topRows.get(0)[1]).longValue();
+            int topPct = totalCommits > 0 ? (int) (topCount * 100 / totalCommits) : 0;
+
+            return new RepoCompareDto(
+                repoId.toString(), repo.getFullName(),
+                health.score(), health.label(),
+                totalCommits, totalPRs, mergedPRs, avgMerge,
+                topContributor, topPct,
+                repo.getStars() != null ? repo.getStars() : 0,
+                repo.getForks() != null ? repo.getForks() : 0,
+                repo.getOpenIssuesCount() != null ? repo.getOpenIssuesCount() : 0
+            );
+        }).toList();
+    }
+
+    // ── Compare Two Contributors ──────────────────────────────────────────────
+
+    public List<ContributorCompareDto> compareContributors(UUID userId, List<String> logins) {
+        return logins.stream()
+            .map(login -> analyticsDao.getContributorStats(userId, login))
+            .toList();
     }
 
     // ── Review Queue ───────────────────────────────────────────────────────────

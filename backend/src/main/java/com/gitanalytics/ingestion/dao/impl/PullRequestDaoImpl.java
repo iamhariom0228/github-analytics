@@ -34,8 +34,8 @@ public class PullRequestDaoImpl implements PullRequestDao {
     }
 
     @Override
-    public List<PullRequest> findStalePRs(UUID repoId, OffsetDateTime before) {
-        return pullRequestRepository.findStalePRs(repoId, before);
+    public List<PullRequest> findStalePRs(UUID userId, UUID repoId, OffsetDateTime before) {
+        return pullRequestRepository.findStalePRs(userId, repoId, before);
     }
 
     @Override

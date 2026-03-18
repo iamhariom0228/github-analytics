@@ -207,3 +207,71 @@ export interface ActivityEvent {
   linesRemoved: number | null;
   occurredAt: string;
 }
+
+export interface StarsForksSnapshot {
+  date: string;
+  stars: number;
+  forks: number;
+  watchers: number;
+}
+
+export interface ReleaseTrendPoint {
+  month: string;
+  count: number;
+}
+
+export interface IssueAnalytics {
+  openCount: number;
+  closedCount: number;
+  avgCloseTimeDays: number | null;
+  ageDistribution: Array<{ label: string; count: number }>;
+}
+
+export interface RepoLanguageStat {
+  language: string;
+  bytes: number;
+}
+
+export interface RepoCompare {
+  repoId: string;
+  fullName: string;
+  healthScore: number;
+  healthLabel: string;
+  totalCommits: number;
+  totalPRs: number;
+  mergedPRs: number;
+  avgMergeTimeHours: number;
+  topContributor: string | null;
+  topContributorPct: number;
+  stars: number;
+  forks: number;
+  openIssues: number;
+}
+
+export interface ContributorCompare {
+  login: string;
+  totalCommits: number;
+  linesAdded: number;
+  linesRemoved: number;
+  totalPRs: number;
+  mergedPRs: number;
+  reviewsGiven: number;
+}
+
+export interface ShareSnapshot {
+  login: string;
+  periodFrom: string;
+  periodTo: string;
+  commits: number;
+  prsAuthored: number;
+  reviewsGiven: number;
+  linesAdded: number;
+  linesRemoved: number;
+  currentStreak: number;
+  longestStreak: number;
+}
+
+export interface CreateShareResponse {
+  token: string;
+  url: string;
+}

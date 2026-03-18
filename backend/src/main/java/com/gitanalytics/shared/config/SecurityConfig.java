@@ -38,6 +38,7 @@ public class SecurityConfig {
                 .requestMatchers("/webhooks/github").permitAll()
                 .requestMatchers("/actuator/health").permitAll()
                 .requestMatchers("/dev/**").permitAll()
+                .requestMatchers("/public/**").permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .anyRequest().authenticated()
             )

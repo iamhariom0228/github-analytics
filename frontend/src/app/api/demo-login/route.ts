@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8080";
 
 export async function GET() {
   try {
-    const res = await fetch(`${BACKEND_URL}/api/v1/dev/demo-token`);
+    const res = await fetch(`${BACKEND_URL}/api/v1/dev/demo-token`, { cache: "no-store" });
 
     if (!res.ok) {
       return new NextResponse("Demo login unavailable", { status: 503 });

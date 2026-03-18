@@ -408,4 +408,106 @@ public interface AnalyticsRepository extends Repository<Commit, Long> {
     List<Object[]> getCommitTrendByRepo(@Param("repoId") UUID repoId,
                                         @Param("from") OffsetDateTime from,
                                         @Param("to") OffsetDateTime to);
+
+    // ── Stars & Forks Trend ───────────────────────────────────────────────────
+
+    @Query(value = """
+        SELECT snapshotted_on::text, stars, forks, watchers
+        FROM repo_stats_snapshots
+        WHERE repo_id = :repoId
+          AND snapshotted_on >= CURRENT_DATE - INTERVAL '90 days'
+        ORDER BY snapshotted_on ASC
+        """, nativeQuery = true)
+    List<Object[]> getStarsForksTrend(@Param("repoId") UUID repoId);
+
+    // ── Release Trend ─────────────────────────────────────────────────────────
+
+    @Query(value = """
+        SELECT TO_CHAR(published_at AT TIME ZONE 'UTC', 'YYYY-MM') AS month,
+               COUNT(*) AS release_count
+        FROM releases
+        WHERE repo_id = :repoId
+          AND published_at IS NOT NULL
+          AND published_at >= NOW() - INTERVAL '12 months'
+        GROUP BY month
+        ORDER BY month ASC
+        """, nativeQuery = true)
+    List<Object[]> getReleaseTrend(@Param("repoId") UUID repoId);
+
+    // ── Issue Analytics ───────────────────────────────────────────────────────
+
+    @Query(value = """
+        SELECT
+            COUNT(*) FILTER (WHERE state = 'open')   AS open_count,
+            COUNT(*) FILTER (WHERE state = 'closed') AS closed_count,
+            AVG(EXTRACT(EPOCH FROM (closed_at - created_at)) / 86400.0)
+                FILTER (WHERE state = 'closed' AND closed_at IS NOT NULL) AS avg_close_days
+        FROM issues
+        WHERE repo_id = :repoId
+        """, nativeQuery = true)
+    Object[] getIssueStats(@Param("repoId") UUID repoId);
+
+    @Query(value = """
+        SELECT
+            CASE
+                WHEN NOW() - created_at < INTERVAL '1 day'   THEN '< 1 day'
+                WHEN NOW() - created_at < INTERVAL '7 days'  THEN '1-7 days'
+                WHEN NOW() - created_at < INTERVAL '30 days' THEN '7-30 days'
+                WHEN NOW() - created_at < INTERVAL '90 days' THEN '30-90 days'
+                ELSE '> 90 days'
+            END AS age_bucket,
+            COUNT(*) AS cnt
+        FROM issues
+        WHERE repo_id = :repoId AND state = 'open'
+        GROUP BY age_bucket
+        ORDER BY MIN(NOW() - created_at) ASC
+        """, nativeQuery = true)
+    List<Object[]> getIssueAgeDistribution(@Param("repoId") UUID repoId);
+
+    // ── Language Bytes ────────────────────────────────────────────────────────
+
+    @Query(value = """
+        SELECT language, bytes
+        FROM repo_languages
+        WHERE repo_id = :repoId
+        ORDER BY bytes DESC
+        """, nativeQuery = true)
+    List<Object[]> getLanguageBytes(@Param("repoId") UUID repoId);
+
+    // ── Contributor Compare ───────────────────────────────────────────────────
+
+    @Query(value = """
+        SELECT
+            c.author_login,
+            COUNT(*) AS total_commits,
+            COALESCE(SUM(c.additions), 0) AS lines_added,
+            COALESCE(SUM(c.deletions), 0) AS lines_removed
+        FROM commits c
+        JOIN tracked_repos r ON c.repo_id = r.id
+        WHERE r.user_id = :userId
+          AND c.author_login = :login
+        GROUP BY c.author_login
+        """, nativeQuery = true)
+    List<Object[]> getContributorCommitStats(@Param("userId") UUID userId, @Param("login") String login);
+
+    @Query(value = """
+        SELECT
+            COUNT(*) AS total_prs,
+            COUNT(*) FILTER (WHERE merged_at IS NOT NULL) AS merged_prs
+        FROM pull_requests pr
+        JOIN tracked_repos r ON pr.repo_id = r.id
+        WHERE r.user_id = :userId
+          AND pr.author_login = :login
+        """, nativeQuery = true)
+    Object[] getContributorPRStats(@Param("userId") UUID userId, @Param("login") String login);
+
+    @Query(value = """
+        SELECT COUNT(*)
+        FROM pr_reviews rv
+        JOIN pull_requests pr ON rv.pr_id = pr.id
+        JOIN tracked_repos r ON pr.repo_id = r.id
+        WHERE r.user_id = :userId
+          AND rv.reviewer_login = :login
+        """, nativeQuery = true)
+    Long getContributorReviewCount(@Param("userId") UUID userId, @Param("login") String login);
 }

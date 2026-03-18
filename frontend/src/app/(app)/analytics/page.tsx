@@ -4,13 +4,17 @@ import { useState } from "react";
 import {
   useHeatmap, usePRLifecycle, usePRSizeDistribution,
   useReviewsSummary, useCommitTrend, useOverview,
-  usePRMergeRateTrend, useReviewerCoverage,
+  usePRMergeRateTrend, useReviewerCoverage, useCollaboration,
+  useStarsForksTrend, useReleaseTrend, useIssueAnalytics,
+  useLanguageBytes,
 } from "@/hooks/useAnalytics";
 import { useRepos } from "@/hooks/useRepos";
+import { useAuth } from "@/hooks/useAuth";
 import { DateRangePicker, usePresetDates, useDatePreset } from "@/components/shared/DateRangePicker";
-import { TrendingUp, GitPullRequest, Star, Code2, ShieldCheck } from "lucide-react";
+import { TrendingUp, GitPullRequest, Star, Code2, ShieldCheck, Share2, Check } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  LineChart, Line, BarChart, Bar,
 } from "recharts";
 import { StatCard } from "./_components/StatCard";
 import { CommitTrendChart } from "./_components/CommitTrendChart";
@@ -18,8 +22,11 @@ import { ContributionHeatmapSection } from "./_components/ContributionHeatmapSec
 import { PRLifecycleSection } from "./_components/PRLifecycleSection";
 import { ReviewsSection } from "./_components/ReviewsSection";
 import { LanguageDistribution } from "./_components/LanguageDistribution";
+import { ContributorNetworkGraph } from "@/components/charts/ContributorNetworkGraph";
+import { IssuesSection } from "./_components/IssuesSection";
+import { useCreateShare } from "@/hooks/useAnalytics";
 
-const tabs = ["Commits", "Pull Requests", "Reviews", "Languages"] as const;
+const tabs = ["Commits", "Pull Requests", "Reviews", "Languages", "Issues"] as const;
 type Tab = (typeof tabs)[number];
 
 export default function AnalyticsPage() {
@@ -29,6 +36,7 @@ export default function AnalyticsPage() {
   const { from, to } = usePresetDates(preset);
 
   const { data: repos } = useRepos();
+  const { data: authUser } = useAuth();
   const { data: heatmap, isLoading: heatmapLoading } = useHeatmap(undefined, undefined, from, to);
   const { data: trend, isLoading: trendLoading } = useCommitTrend(from, to, granularity);
   const { data: overview, isLoading: overviewLoading } = useOverview(from, to);
@@ -37,6 +45,15 @@ export default function AnalyticsPage() {
   const { data: reviews, isLoading: reviewsLoading } = useReviewsSummary(from, to);
   const { data: mergeRateTrend, isLoading: mergeRateLoading } = usePRMergeRateTrend(from, to);
   const { data: reviewerCoverage } = useReviewerCoverage(from, to);
+  const { data: collaboration } = useCollaboration(from, to);
+
+  // Stars & Forks trend — pick first repo by default
+  const firstRepoId = repos?.[0]?.id;
+  const { data: starsForksTrend } = useStarsForksTrend(firstRepoId);
+  const { data: releaseTrend } = useReleaseTrend(firstRepoId);
+  const { data: issueAnalytics, isLoading: issueLoading } = useIssueAnalytics(firstRepoId);
+  const { data: languageBytes } = useLanguageBytes(firstRepoId);
+  const { mutate: share, data: shareResult, isPending: sharing } = useCreateShare();
 
   const trendChartData = (trend ?? []).map((p) => {
     const d = new Date(p.date);
@@ -55,8 +72,25 @@ export default function AnalyticsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Analytics</h1>
-        <DateRangePicker value={preset} onChange={(p) => setPreset(p)} />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => share({ from, to })}
+            disabled={sharing}
+            title="Create shareable link"
+            className="flex items-center gap-1.5 px-3 py-2 text-sm border border-border rounded-lg hover:bg-muted/40 transition-colors disabled:opacity-50"
+          >
+            {shareResult ? <Check className="w-4 h-4 text-green-500" /> : <Share2 className="w-4 h-4" />}
+            {sharing ? "Sharing…" : shareResult ? "Copied!" : "Share"}
+          </button>
+          <DateRangePicker value={preset} onChange={(p) => setPreset(p)} />
+        </div>
       </div>
+      {shareResult && (
+        <div className="bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-3 text-sm flex items-center justify-between">
+          <span className="text-green-600">Snapshot created! Share this link:</span>
+          <a href={shareResult.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-mono text-xs">{typeof window !== "undefined" ? window.location.origin : ""}{shareResult.url}</a>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard label="Commits" value={overview?.commits ?? 0} icon={TrendingUp} isLoading={overviewLoading} />
@@ -156,12 +190,65 @@ export default function AnalyticsPage() {
       )}
 
       {tab === "Languages" && (
+        <div className="space-y-4">
+          <div className="bg-card border border-border rounded-xl p-6">
+            <h2 className="font-semibold mb-1">Language Distribution</h2>
+            <p className="text-xs text-muted-foreground mb-5">
+              Primary language of each tracked repository.
+            </p>
+            <LanguageDistribution repos={repos ?? []} byteStats={languageBytes} />
+          </div>
+
+          {/* Stars & Forks Growth */}
+          {(starsForksTrend?.length ?? 0) > 0 && (
+            <div className="bg-card border border-border rounded-xl p-6">
+              <h2 className="font-semibold mb-1">Stars &amp; Forks Growth</h2>
+              <p className="text-xs text-muted-foreground mb-5">Daily snapshots of stars and forks for {repos?.[0]?.fullName}.</p>
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={starsForksTrend!.map((p) => ({ date: p.date.substring(0, 10), Stars: p.stars, Forks: p.forks }))} margin={{ top: 4, right: 4, left: -12, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
+                  <Legend wrapperStyle={{ fontSize: "12px" }} />
+                  <Line type="monotone" dataKey="Stars" stroke="#f59e0b" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="Forks" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Release Cadence */}
+          {(releaseTrend?.length ?? 0) > 0 && (
+            <div className="bg-card border border-border rounded-xl p-6">
+              <h2 className="font-semibold mb-1">Release Cadence</h2>
+              <p className="text-xs text-muted-foreground mb-5">Number of releases per month (last 12 months).</p>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={releaseTrend!.map((p) => ({ month: p.month, Releases: p.count }))} margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
+                  <Bar dataKey="Releases" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "Issues" && (
+        <IssuesSection repoId={firstRepoId} data={issueAnalytics} isLoading={issueLoading} />
+      )}
+
+      {/* Collaboration Network — shown in Commits tab below heatmap */}
+      {tab === "Commits" && collaboration && authUser && (
         <div className="bg-card border border-border rounded-xl p-6">
-          <h2 className="font-semibold mb-1">Language Distribution</h2>
-          <p className="text-xs text-muted-foreground mb-5">
-            Primary language of each tracked repository.
+          <h2 className="font-semibold mb-1">Collaboration Network</h2>
+          <p className="text-xs text-muted-foreground mb-4">
+            Connections between you and collaborators based on PR reviews.
           </p>
-          <LanguageDistribution repos={repos ?? []} />
+          <ContributorNetworkGraph data={collaboration} selfLogin={authUser.username} />
         </div>
       )}
     </div>

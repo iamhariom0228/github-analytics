@@ -6,6 +6,8 @@ import com.gitanalytics.auth.service.GitHubOAuthService;
 import com.gitanalytics.ingestion.client.GitHubApiClient;
 import com.gitanalytics.ingestion.dao.*;
 import com.gitanalytics.ingestion.entity.*;
+import com.gitanalytics.ingestion.repository.RepoLanguageRepository;
+import com.gitanalytics.ingestion.repository.RepoStatsSnapshotRepository;
 import com.gitanalytics.shared.exception.GitHubApiException;
 import com.gitanalytics.shared.kafka.events.SyncCompletedEvent;
 import com.gitanalytics.shared.kafka.events.SyncRequestedEvent;
@@ -33,11 +35,14 @@ public class SyncConsumer {
     private final PrReviewDao prReviewDao;
     private final SyncJobDao syncJobDao;
     private final ReleaseDao releaseDao;
+    private final IssueDao issueDao;
     private final UserDao userDao;
     private final GitHubApiClient gitHubApiClient;
     private final GitHubOAuthService gitHubOAuthService;
     private final SyncProducer syncProducer;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final RepoLanguageRepository repoLanguageRepository;
+    private final RepoStatsSnapshotRepository repoStatsSnapshotRepository;
 
     @KafkaListener(topics = "ga.sync.requested", groupId = "github-analytics")
     public void handleSyncRequested(SyncRequestedEvent event) {
@@ -69,6 +74,9 @@ public class SyncConsumer {
             syncPullRequests(repo, accessToken, user.getId(), since, count);
             syncRepoMeta(repo, accessToken, user.getId());
             syncReleases(repo, accessToken, user.getId(), count);
+            syncIssues(repo, accessToken, user.getId(), since);
+            syncLanguages(repo, accessToken, user.getId());
+            takeStatsSnapshot(repo);
 
             repo.setSyncStatus(TrackedRepo.SyncStatus.DONE);
             repo.setLastSyncedAt(OffsetDateTime.now());
@@ -239,6 +247,58 @@ public class SyncConsumer {
             } catch (Exception e) {
                 log.debug("Failed to upsert release {}: {}", dto.getTagName(), e.getMessage());
             }
+        }
+    }
+
+    private void syncIssues(TrackedRepo repo, String token, UUID userId, OffsetDateTime since) {
+        try {
+            List<GitHubApiClient.GitHubIssueDto> issues = gitHubApiClient.getIssues(
+                token, userId, repo.getOwner(), repo.getName(), since);
+            for (GitHubApiClient.GitHubIssueDto gi : issues) {
+                if (gi.getNumber() == null) continue;
+                try {
+                    issueDao.upsert(Issue.builder()
+                        .repo(repo)
+                        .issueNumber(gi.getNumber())
+                        .title(gi.getTitle())
+                        .authorLogin(gi.getUser() != null ? gi.getUser().getLogin() : null)
+                        .state(gi.getState())
+                        .createdAt(gi.getCreatedAt())
+                        .closedAt(gi.getClosedAt())
+                        .build());
+                } catch (Exception e) {
+                    log.debug("Failed to upsert issue #{}: {}", gi.getNumber(), e.getMessage());
+                }
+            }
+            log.info("Synced {} issues for {}", issues.size(), repo.getFullName());
+        } catch (Exception e) {
+            log.warn("Failed to sync issues for {}: {}", repo.getFullName(), e.getMessage());
+        }
+    }
+
+    private void syncLanguages(TrackedRepo repo, String token, UUID userId) {
+        try {
+            java.util.Map<String, Long> langs = gitHubApiClient.getLanguages(
+                token, userId, repo.getOwner(), repo.getName());
+            for (java.util.Map.Entry<String, Long> entry : langs.entrySet()) {
+                repoLanguageRepository.upsert(repo.getId(), entry.getKey(), entry.getValue());
+            }
+        } catch (Exception e) {
+            log.warn("Failed to sync languages for {}: {}", repo.getFullName(), e.getMessage());
+        }
+    }
+
+    private void takeStatsSnapshot(TrackedRepo repo) {
+        try {
+            repoStatsSnapshotRepository.upsert(
+                repo.getId(),
+                java.time.LocalDate.now(),
+                repo.getStars() != null ? repo.getStars() : 0,
+                repo.getForks() != null ? repo.getForks() : 0,
+                repo.getWatchers() != null ? repo.getWatchers() : 0
+            );
+        } catch (Exception e) {
+            log.warn("Failed to take stats snapshot for {}: {}", repo.getFullName(), e.getMessage());
         }
     }
 

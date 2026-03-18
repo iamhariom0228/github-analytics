@@ -28,8 +28,9 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
                                                        OffsetDateTime from, OffsetDateTime to);
 
     @Query("SELECT pr FROM PullRequest pr WHERE pr.repo.id = :repoId " +
+           "AND pr.repo.user.id = :userId " +
            "AND pr.state = 'OPEN' AND pr.createdAt < :before ORDER BY pr.createdAt ASC")
-    List<PullRequest> findStalePRs(UUID repoId, OffsetDateTime before);
+    List<PullRequest> findStalePRs(UUID userId, UUID repoId, OffsetDateTime before);
 
     @Query("SELECT pr FROM PullRequest pr WHERE pr.repo.user.id = :userId " +
            "AND pr.authorLogin = :login ORDER BY pr.createdAt DESC LIMIT :limit")

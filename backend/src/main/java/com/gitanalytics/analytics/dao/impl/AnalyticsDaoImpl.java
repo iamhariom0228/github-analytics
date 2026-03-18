@@ -1,11 +1,7 @@
 package com.gitanalytics.analytics.dao.impl;
 
 import com.gitanalytics.analytics.dao.AnalyticsDao;
-import com.gitanalytics.analytics.dto.CommitTrendDto;
-import com.gitanalytics.analytics.dto.ContributorStatsDto;
-import com.gitanalytics.analytics.dto.HeatmapCellDto;
-import com.gitanalytics.analytics.dto.PRMergeRateDto;
-import com.gitanalytics.analytics.dto.ReviewerCoverageDto;
+import com.gitanalytics.analytics.dto.*;
 import com.gitanalytics.analytics.repository.AnalyticsRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
@@ -288,5 +284,79 @@ public class AnalyticsDaoImpl implements AnalyticsDao {
                     return new CommitTrendDto(date, ((Number) r[1]).longValue());
                 })
                 .toList();
+    }
+
+    // ── Stars & Forks Trend ───────────────────────────────────────────────────
+
+    @Override
+    public List<StarsForksSnapshotDto> getStarsForksTrend(UUID repoId) {
+        return analyticsRepository.getStarsForksTrend(repoId).stream()
+                .map(r -> new StarsForksSnapshotDto(
+                        (String) r[0],
+                        ((Number) r[1]).intValue(),
+                        ((Number) r[2]).intValue(),
+                        ((Number) r[3]).intValue()))
+                .toList();
+    }
+
+    // ── Release Trend ─────────────────────────────────────────────────────────
+
+    @Override
+    public List<ReleaseTrendDto> getReleaseTrend(UUID repoId) {
+        return analyticsRepository.getReleaseTrend(repoId).stream()
+                .map(r -> new ReleaseTrendDto(
+                        (String) r[0],
+                        ((Number) r[1]).longValue()))
+                .toList();
+    }
+
+    // ── Issue Analytics ───────────────────────────────────────────────────────
+
+    @Override
+    public IssueAnalyticsDto getIssueAnalytics(UUID repoId) {
+        Object[] stats = firstRow(analyticsRepository.getIssueStats(repoId));
+        long open   = stats != null && stats[0] != null ? ((Number) stats[0]).longValue() : 0;
+        long closed = stats != null && stats[1] != null ? ((Number) stats[1]).longValue() : 0;
+        Double avg  = stats != null && stats[2] != null ? ((Number) stats[2]).doubleValue() : null;
+
+        List<IssueAnalyticsDto.AgeBucket> buckets = analyticsRepository
+                .getIssueAgeDistribution(repoId).stream()
+                .map(r -> new IssueAnalyticsDto.AgeBucket((String) r[0], ((Number) r[1]).longValue()))
+                .toList();
+
+        return new IssueAnalyticsDto(open, closed, avg, buckets);
+    }
+
+    // ── Language Bytes ────────────────────────────────────────────────────────
+
+    @Override
+    public List<RepoLanguageDto> getLanguageBytes(UUID repoId) {
+        return analyticsRepository.getLanguageBytes(repoId).stream()
+                .map(r -> new RepoLanguageDto((String) r[0], ((Number) r[1]).longValue()))
+                .toList();
+    }
+
+    // ── Contributor Compare ───────────────────────────────────────────────────
+
+    @Override
+    public ContributorCompareDto getContributorStats(UUID userId, String login) {
+        List<Object[]> commitRows = analyticsRepository.getContributorCommitStats(userId, login);
+        long totalCommits = 0, linesAdded = 0, linesRemoved = 0;
+        if (!commitRows.isEmpty()) {
+            Object[] row = commitRows.get(0);
+            totalCommits  = row[1] != null ? ((Number) row[1]).longValue() : 0;
+            linesAdded    = row[2] != null ? ((Number) row[2]).longValue() : 0;
+            linesRemoved  = row[3] != null ? ((Number) row[3]).longValue() : 0;
+        }
+
+        Object[] prRow = firstRow(analyticsRepository.getContributorPRStats(userId, login));
+        long totalPRs  = prRow != null && prRow[0] != null ? ((Number) prRow[0]).longValue() : 0;
+        long mergedPRs = prRow != null && prRow[1] != null ? ((Number) prRow[1]).longValue() : 0;
+
+        Long reviews = analyticsRepository.getContributorReviewCount(userId, login);
+        long reviewsGiven = reviews != null ? reviews : 0;
+
+        return new ContributorCompareDto(login, totalCommits, linesAdded, linesRemoved,
+                totalPRs, mergedPRs, reviewsGiven);
     }
 }

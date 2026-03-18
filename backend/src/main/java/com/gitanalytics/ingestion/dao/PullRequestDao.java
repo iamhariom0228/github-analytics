@@ -11,7 +11,7 @@ public interface PullRequestDao {
     Optional<PullRequest> findByRepoIdAndPrNumber(UUID repoId, Integer prNumber);
     List<PullRequest> findByRepoId(UUID repoId);
     List<PullRequest> findByUserAndAuthorAndDateRange(UUID userId, String login, OffsetDateTime from, OffsetDateTime to);
-    List<PullRequest> findStalePRs(UUID repoId, OffsetDateTime before);
+    List<PullRequest> findStalePRs(UUID userId, UUID repoId, OffsetDateTime before);
     List<PullRequest> findRecentByUser(UUID userId, String login, int limit);
     List<PullRequest> findReviewQueue(UUID userId, String login);
     PullRequest save(PullRequest pullRequest);

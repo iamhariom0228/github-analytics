@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useOverview, usePRLifecycle, useCommitTrend } from "@/hooks/useAnalytics";
+import { useOverview, usePRLifecycle, useCommitTrend, useCompareRepos, useCompareContributors } from "@/hooks/useAnalytics";
+import { useRepos } from "@/hooks/useRepos";
 import { subDays, formatISO, format, parseISO, isValid } from "date-fns";
 import {
   AreaChart, Area, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip,
@@ -179,13 +180,197 @@ function DateInput({ label, value, onChange }: {
   );
 }
 
+// ── Repos Compare Tab ──────────────────────────────────────────────────────
+
+function ReposCompareTab() {
+  const { data: repos } = useRepos();
+  const [repoAId, setRepoAId] = useState("");
+  const [repoBId, setRepoBId] = useState("");
+
+  const selectedIds = [repoAId, repoBId].filter(Boolean);
+  const { data: compared, isLoading } = useCompareRepos(selectedIds);
+
+  const repoA = compared?.[0];
+  const repoB = compared?.[1];
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="text-xs text-muted-foreground block mb-1">Repository A</label>
+          <select
+            value={repoAId}
+            onChange={(e) => setRepoAId(e.target.value)}
+            className="w-full border border-border bg-background text-foreground text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/50"
+          >
+            <option value="">Select a repo…</option>
+            {(repos ?? []).map((r) => (
+              <option key={r.id} value={r.id}>{r.fullName}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground block mb-1">Repository B</label>
+          <select
+            value={repoBId}
+            onChange={(e) => setRepoBId(e.target.value)}
+            className="w-full border border-border bg-background text-foreground text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/50"
+          >
+            <option value="">Select a repo…</option>
+            {(repos ?? []).filter((r) => r.id !== repoAId).map((r) => (
+              <option key={r.id} value={r.id}>{r.fullName}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {repoAId && repoBId && (
+        isLoading ? (
+          <div className="grid grid-cols-2 gap-4">
+            {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+          </div>
+        ) : repoA && repoB ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              {[
+                { label: "Health Score", a: `${repoA.healthScore}% (${repoA.healthLabel})`, b: `${repoB.healthScore}% (${repoB.healthLabel})`, rawA: repoA.healthScore, rawB: repoB.healthScore },
+                { label: "Total Commits", a: repoA.totalCommits, b: repoB.totalCommits, rawA: repoA.totalCommits, rawB: repoB.totalCommits },
+                { label: "Merged PRs", a: repoA.mergedPRs, b: repoB.mergedPRs, rawA: repoA.mergedPRs, rawB: repoB.mergedPRs },
+                { label: "Stars", a: repoA.stars, b: repoB.stars, rawA: repoA.stars, rawB: repoB.stars },
+                { label: "Forks", a: repoA.forks, b: repoB.forks, rawA: repoA.forks, rawB: repoB.forks },
+                { label: "Open Issues", a: repoA.openIssues, b: repoB.openIssues, rawA: repoA.openIssues, rawB: repoB.openIssues, inverse: true },
+              ].map((m) => (
+                <CompareCard
+                  key={m.label}
+                  label={m.label}
+                  aValue={m.a}
+                  bValue={m.b}
+                  pct={delta(Number(m.rawA), Number(m.rawB))}
+                  aLabel={repoA.fullName.split("/")[1]}
+                  bLabel={repoB.fullName.split("/")[1]}
+                  isLoading={false}
+                  inverse={m.inverse}
+                />
+              ))}
+            </div>
+            {(repoA.topContributor || repoB.topContributor) && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-card border border-border rounded-xl p-5">
+                  <div className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Top Contributor</div>
+                  <div className="font-semibold">{repoA.topContributor ?? "—"}</div>
+                  <div className="text-xs text-muted-foreground">{repoA.topContributorPct}% of commits</div>
+                </div>
+                <div className="bg-card border border-border rounded-xl p-5">
+                  <div className="text-xs text-muted-foreground uppercase tracking-wide mb-2">Top Contributor</div>
+                  <div className="font-semibold">{repoB.topContributor ?? "—"}</div>
+                  <div className="text-xs text-muted-foreground">{repoB.topContributorPct}% of commits</div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : null
+      )}
+
+      {!repoAId || !repoBId ? (
+        <div className="bg-muted/20 border border-border rounded-xl p-8 text-center text-muted-foreground text-sm">
+          Select two repositories above to compare them side by side.
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// ── Contributors Compare Tab ───────────────────────────────────────────────
+
+function ContributorsCompareTab() {
+  const [loginA, setLoginA] = useState("");
+  const [loginB, setLoginB] = useState("");
+
+  const logins = [loginA.trim(), loginB.trim()].filter(Boolean);
+  const { data: compared, isLoading } = useCompareContributors(logins);
+
+  const contribA = compared?.[0];
+  const contribB = compared?.[1];
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="text-xs text-muted-foreground block mb-1">Contributor A (GitHub login)</label>
+          <input
+            type="text"
+            value={loginA}
+            onChange={(e) => setLoginA(e.target.value)}
+            placeholder="e.g. torvalds"
+            className="w-full border border-border bg-background text-foreground text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/50"
+          />
+        </div>
+        <div>
+          <label className="text-xs text-muted-foreground block mb-1">Contributor B (GitHub login)</label>
+          <input
+            type="text"
+            value={loginB}
+            onChange={(e) => setLoginB(e.target.value)}
+            placeholder="e.g. gvanrossum"
+            className="w-full border border-border bg-background text-foreground text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/50"
+          />
+        </div>
+      </div>
+
+      {loginA.trim() && loginB.trim() && (
+        isLoading ? (
+          <div className="grid grid-cols-2 gap-4">
+            {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+          </div>
+        ) : contribA && contribB ? (
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+            {[
+              { label: "Total Commits", a: contribA.totalCommits, b: contribB.totalCommits },
+              { label: "Lines Added", a: contribA.linesAdded, b: contribB.linesAdded },
+              { label: "Lines Removed", a: contribA.linesRemoved, b: contribB.linesRemoved },
+              { label: "PRs Authored", a: contribA.totalPRs, b: contribB.totalPRs },
+              { label: "PRs Merged", a: contribA.mergedPRs, b: contribB.mergedPRs },
+              { label: "Reviews Given", a: contribA.reviewsGiven, b: contribB.reviewsGiven },
+            ].map((m) => (
+              <CompareCard
+                key={m.label}
+                label={m.label}
+                aValue={m.a.toLocaleString()}
+                bValue={m.b.toLocaleString()}
+                pct={delta(m.a, m.b)}
+                aLabel={contribA.login}
+                bLabel={contribB.login}
+                isLoading={false}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="bg-muted/20 border border-border rounded-xl p-8 text-center text-muted-foreground text-sm">
+            No data found for these contributors in your tracked repositories.
+          </div>
+        )
+      )}
+
+      {(!loginA.trim() || !loginB.trim()) && (
+        <div className="bg-muted/20 border border-border rounded-xl p-8 text-center text-muted-foreground text-sm">
+          Enter two GitHub logins above to compare contributors side by side.
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main page ──────────────────────────────────────────────────────────────
 
 function toDateStr(d: Date) {
   return format(d, "yyyy-MM-dd");
 }
 
+type CompareTab = "periods" | "repos" | "contributors";
+
 export default function ComparePage() {
+  const [compareTab, setCompareTab] = useState<CompareTab>("periods");
+
   const [mode, setMode] = useState<"preset" | "custom">("preset");
   const [preset, setPreset] = useState(0);
   const [openPicker, setOpenPicker] = useState<"A" | "B" | null>(null);
@@ -209,7 +394,7 @@ export default function ComparePage() {
   const bFrom = mode === "custom" && parseSafe(customBFrom) ? formatISO(parseSafe(customBFrom)!) : formatISO(p.bFrom());
   const bTo   = mode === "custom" && parseSafe(customBTo)   ? formatISO(parseSafe(customBTo)!)   : formatISO(p.bTo());
 
-  const enabled = mode === "preset" || customDatesValid;
+  const enabled = compareTab === "periods" && (mode === "preset" || customDatesValid);
 
   const { data: overviewA, isLoading: loadA } = useOverview(aFrom, aTo, { enabled });
   const { data: overviewB, isLoading: loadB } = useOverview(bFrom, bTo, { enabled });
@@ -282,211 +467,237 @@ export default function ComparePage() {
   return (
     <div className="space-y-8 max-w-4xl">
       <div>
-        <h1 className="text-2xl font-bold">Period Comparison</h1>
+        <h1 className="text-2xl font-bold">Compare</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          Compare your productivity across two time periods side by side.
+          Compare periods, repositories, or contributors side by side.
         </p>
       </div>
 
-      {/* Preset selector + custom toggle */}
-      <div className="flex gap-2 flex-wrap items-center">
-        {PRESETS.map((pr, i) => (
+      {/* Top-level tabs */}
+      <div className="flex border-b border-border">
+        {(["periods", "repos", "contributors"] as CompareTab[]).map((t) => (
           <button
-            key={pr.label}
-            onClick={() => { setPreset(i); setMode("preset"); setOpenPicker(null); }}
-            className={`px-4 py-2 text-sm rounded-lg border transition-colors ${
-              mode === "preset" && preset === i
-                ? "bg-primary text-primary-foreground border-primary"
-                : "border-border text-muted-foreground hover:text-foreground hover:bg-muted/40"
+            key={t}
+            onClick={() => setCompareTab(t)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors capitalize ${
+              compareTab === t ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
-            {pr.label}
+            {t === "periods" ? "Periods" : t === "repos" ? "Repositories" : "Contributors"}
           </button>
         ))}
-        <button
-          onClick={() => setMode("custom")}
-          className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg border transition-colors ${
-            mode === "custom"
-              ? "bg-primary text-primary-foreground border-primary"
-              : "border-border text-muted-foreground hover:text-foreground hover:bg-muted/40"
-          }`}
-        >
-          <SlidersHorizontal className="w-3.5 h-3.5" />
-          Custom
-        </button>
       </div>
 
-      {/* Period labels — clickable in custom mode */}
-      <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-4">
-          {/* Period B box — shown first so users pick the baseline first */}
-          <div
-            onClick={() => {
-              if (mode !== "custom") return;
-              setOpenPicker(openPicker === "B" ? null : "B");
-            }}
-            className={`rounded-xl border-2 px-4 py-3 text-sm font-medium text-center transition-colors select-none ${
-              mode === "custom"
-                ? openPicker === "B"
-                  ? "border-muted-foreground bg-muted/50 cursor-pointer"
-                  : "border-muted bg-muted/30 cursor-pointer hover:bg-muted/50"
-                : "border-muted bg-muted/30"
-            }`}
-          >
-            <span className="text-xs text-muted-foreground block mb-0.5">Period B (previous)</span>
-            {bLabel}
-            {mode === "custom" && (
-              <span className="text-[10px] text-muted-foreground block mt-1 font-normal">
-                {openPicker === "B" ? "▲ close" : "▼ edit"}
-              </span>
-            )}
-          </div>
+      {/* Repos tab */}
+      {compareTab === "repos" && <ReposCompareTab />}
 
-          {/* Period A box */}
-          <div
-            onClick={() => {
-              if (mode !== "custom") return;
-              setOpenPicker(openPicker === "A" ? null : "A");
-            }}
-            className={`rounded-xl border-2 px-4 py-3 text-sm font-medium text-center transition-colors select-none ${
-              mode === "custom"
-                ? openPicker === "A"
-                  ? "border-primary bg-primary/10 cursor-pointer"
-                  : "border-primary/40 bg-primary/5 cursor-pointer hover:bg-primary/10"
-                : "border-primary/40 bg-primary/5"
-            }`}
-          >
-            <span className="text-xs text-muted-foreground block mb-0.5">Period A (current)</span>
-            {aLabel}
-            {mode === "custom" && (
-              <span className="text-[10px] text-primary block mt-1 font-normal">
-                {openPicker === "A" ? "▲ close" : "▼ edit"}
-              </span>
-            )}
-          </div>
-        </div>
+      {/* Contributors tab */}
+      {compareTab === "contributors" && <ContributorsCompareTab />}
 
-        {/* Inline date picker panel */}
-        {mode === "custom" && openPicker && (
-          <div className="bg-muted/20 border border-border rounded-xl p-5 space-y-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              {openPicker === "A" ? "Period A — current period" : "Period B — comparison period"}
-            </p>
-            <div className="flex flex-wrap gap-4 items-end">
-              <DateInput
-                label="From"
-                value={openPicker === "A" ? customAFrom : customBFrom}
-                onChange={openPicker === "A" ? setCustomAFrom : setCustomBFrom}
-              />
-              <DateInput
-                label="To"
-                value={openPicker === "A" ? customATo : customBTo}
-                onChange={openPicker === "A" ? setCustomATo : setCustomBTo}
-              />
+      {/* Periods tab (original content) */}
+      {compareTab === "periods" && (
+        <>
+          {/* Preset selector + custom toggle */}
+          <div className="flex gap-2 flex-wrap items-center">
+            {PRESETS.map((pr, i) => (
               <button
-                onClick={() => setOpenPicker(null)}
-                className="px-5 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                key={pr.label}
+                onClick={() => { setPreset(i); setMode("preset"); setOpenPicker(null); }}
+                className={`px-4 py-2 text-sm rounded-lg border transition-colors ${
+                  mode === "preset" && preset === i
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "border-border text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                }`}
               >
-                Done
+                {pr.label}
               </button>
-            </div>
-            {(() => {
-              const aF = parseSafe(customAFrom), bT = parseSafe(customBTo);
-              const overlap = aF && bT && aF < bT;
-              return overlap ? (
-                <p className="text-[11px] text-amber-500">Period A overlaps with Period B — results may be inaccurate.</p>
-              ) : null;
-            })()}
+            ))}
+            <button
+              onClick={() => setMode("custom")}
+              className={`inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-lg border transition-colors ${
+                mode === "custom"
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "border-border text-muted-foreground hover:text-foreground hover:bg-muted/40"
+              }`}
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              Custom
+            </button>
           </div>
-        )}
-      </div>
 
-      {/* Metrics grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        {metrics.map((m) => (
-          <CompareCard
-            key={m.label}
-            label={m.label}
-            aValue={m.aValue}
-            bValue={m.bValue}
-            pct={delta(
-              typeof m.aValue === "number" ? m.aValue : (m.rawA ?? 0),
-              typeof m.bValue === "number" ? m.bValue : (m.rawB ?? 0),
+          {/* Period labels — clickable in custom mode */}
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-4">
+              {/* Period B box — shown first so users pick the baseline first */}
+              <div
+                onClick={() => {
+                  if (mode !== "custom") return;
+                  setOpenPicker(openPicker === "B" ? null : "B");
+                }}
+                className={`rounded-xl border-2 px-4 py-3 text-sm font-medium text-center transition-colors select-none ${
+                  mode === "custom"
+                    ? openPicker === "B"
+                      ? "border-muted-foreground bg-muted/50 cursor-pointer"
+                      : "border-muted bg-muted/30 cursor-pointer hover:bg-muted/50"
+                    : "border-muted bg-muted/30"
+                }`}
+              >
+                <span className="text-xs text-muted-foreground block mb-0.5">Period B (previous)</span>
+                {bLabel}
+                {mode === "custom" && (
+                  <span className="text-[10px] text-muted-foreground block mt-1 font-normal">
+                    {openPicker === "B" ? "▲ close" : "▼ edit"}
+                  </span>
+                )}
+              </div>
+
+              {/* Period A box */}
+              <div
+                onClick={() => {
+                  if (mode !== "custom") return;
+                  setOpenPicker(openPicker === "A" ? null : "A");
+                }}
+                className={`rounded-xl border-2 px-4 py-3 text-sm font-medium text-center transition-colors select-none ${
+                  mode === "custom"
+                    ? openPicker === "A"
+                      ? "border-primary bg-primary/10 cursor-pointer"
+                      : "border-primary/40 bg-primary/5 cursor-pointer hover:bg-primary/10"
+                    : "border-primary/40 bg-primary/5"
+                }`}
+              >
+                <span className="text-xs text-muted-foreground block mb-0.5">Period A (current)</span>
+                {aLabel}
+                {mode === "custom" && (
+                  <span className="text-[10px] text-primary block mt-1 font-normal">
+                    {openPicker === "A" ? "▲ close" : "▼ edit"}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Inline date picker panel */}
+            {mode === "custom" && openPicker && (
+              <div className="bg-muted/20 border border-border rounded-xl p-5 space-y-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  {openPicker === "A" ? "Period A — current period" : "Period B — comparison period"}
+                </p>
+                <div className="flex flex-wrap gap-4 items-end">
+                  <DateInput
+                    label="From"
+                    value={openPicker === "A" ? customAFrom : customBFrom}
+                    onChange={openPicker === "A" ? setCustomAFrom : setCustomBFrom}
+                  />
+                  <DateInput
+                    label="To"
+                    value={openPicker === "A" ? customATo : customBTo}
+                    onChange={openPicker === "A" ? setCustomATo : setCustomBTo}
+                  />
+                  <button
+                    onClick={() => setOpenPicker(null)}
+                    className="px-5 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                  >
+                    Done
+                  </button>
+                </div>
+                {(() => {
+                  const aF = parseSafe(customAFrom), bT = parseSafe(customBTo);
+                  const overlap = aF && bT && aF < bT;
+                  return overlap ? (
+                    <p className="text-[11px] text-amber-500">Period A overlaps with Period B — results may be inaccurate.</p>
+                  ) : null;
+                })()}
+              </div>
             )}
-            aLabel="This period"
-            bLabel="Previous"
-            isLoading={m.isLoading}
-            inverse={m.inverse}
-          />
-        ))}
-      </div>
+          </div>
 
-      {/* Commit trend side-by-side */}
-      <div className="bg-card border border-border rounded-xl p-6">
-        <h2 className="font-semibold mb-5">Commit Trend</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <div className="text-xs font-medium text-primary mb-2">
-              Period A · {aLabel}
-            </div>
-            <MiniTrendChart
-              data={toChartData(trendA)}
-              color="hsl(var(--primary))"
-              gradientId="compare-grad-a"
-              isLoading={trendLoadA}
-            />
+          {/* Metrics grid */}
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+            {metrics.map((m) => (
+              <CompareCard
+                key={m.label}
+                label={m.label}
+                aValue={m.aValue}
+                bValue={m.bValue}
+                pct={delta(
+                  typeof m.aValue === "number" ? m.aValue : ((m as any).rawA ?? 0),
+                  typeof m.bValue === "number" ? m.bValue : ((m as any).rawB ?? 0),
+                )}
+                aLabel="This period"
+                bLabel="Previous"
+                isLoading={m.isLoading}
+                inverse={(m as any).inverse}
+              />
+            ))}
           </div>
-          <div>
-            <div className="text-xs font-medium text-muted-foreground mb-2">
-              Period B · {bLabel}
-            </div>
-            <MiniTrendChart
-              data={toChartData(trendB)}
-              color="hsl(var(--muted-foreground))"
-              gradientId="compare-grad-b"
-              isLoading={trendLoadB}
-            />
-          </div>
-        </div>
-      </div>
 
-      {/* Key takeaway */}
-      {!overviewLoading && overviewA && overviewB && (
-        <div className="bg-muted/30 border border-border rounded-xl p-5">
-          <h3 className="text-sm font-semibold mb-2">Summary</h3>
-          <div className="text-sm text-muted-foreground space-y-1">
-            {(() => {
-              const commitDelta = delta(overviewA.commits, overviewB.commits);
-              const prDelta = delta(overviewA.prsAuthored, overviewB.prsAuthored);
-              const reviewDelta = delta(overviewA.reviewsGiven, overviewB.reviewsGiven);
-              return (
-                <>
-                  <p>
-                    Commits:{" "}
-                    <span className={commitDelta >= 0 ? "text-green-600 font-medium" : "text-red-500 font-medium"}>
-                      {commitDelta >= 0 ? "▲" : "▼"} {Math.abs(commitDelta)}% {commitDelta >= 0 ? "more" : "fewer"}
-                    </span>{" "}
-                    than the previous period ({overviewA.commits} vs {overviewB.commits}).
-                  </p>
-                  <p>
-                    PRs:{" "}
-                    <span className={prDelta >= 0 ? "text-green-600 font-medium" : "text-red-500 font-medium"}>
-                      {prDelta >= 0 ? "▲" : "▼"} {Math.abs(prDelta)}% {prDelta >= 0 ? "more" : "fewer"}
-                    </span>{" "}
-                    pull requests authored.
-                  </p>
-                  <p>
-                    Reviews:{" "}
-                    <span className={reviewDelta >= 0 ? "text-green-600 font-medium" : "text-red-500 font-medium"}>
-                      {reviewDelta >= 0 ? "▲" : "▼"} {Math.abs(reviewDelta)}%
-                    </span>{" "}
-                    code reviews given.
-                  </p>
-                </>
-              );
-            })()}
+          {/* Commit trend side-by-side */}
+          <div className="bg-card border border-border rounded-xl p-6">
+            <h2 className="font-semibold mb-5">Commit Trend</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <div className="text-xs font-medium text-primary mb-2">
+                  Period A · {aLabel}
+                </div>
+                <MiniTrendChart
+                  data={toChartData(trendA)}
+                  color="hsl(var(--primary))"
+                  gradientId="compare-grad-a"
+                  isLoading={trendLoadA}
+                />
+              </div>
+              <div>
+                <div className="text-xs font-medium text-muted-foreground mb-2">
+                  Period B · {bLabel}
+                </div>
+                <MiniTrendChart
+                  data={toChartData(trendB)}
+                  color="hsl(var(--muted-foreground))"
+                  gradientId="compare-grad-b"
+                  isLoading={trendLoadB}
+                />
+              </div>
+            </div>
           </div>
-        </div>
+
+          {/* Key takeaway */}
+          {!overviewLoading && overviewA && overviewB && (
+            <div className="bg-muted/30 border border-border rounded-xl p-5">
+              <h3 className="text-sm font-semibold mb-2">Summary</h3>
+              <div className="text-sm text-muted-foreground space-y-1">
+                {(() => {
+                  const commitDelta = delta(overviewA.commits, overviewB.commits);
+                  const prDelta = delta(overviewA.prsAuthored, overviewB.prsAuthored);
+                  const reviewDelta = delta(overviewA.reviewsGiven, overviewB.reviewsGiven);
+                  return (
+                    <>
+                      <p>
+                        Commits:{" "}
+                        <span className={commitDelta >= 0 ? "text-green-600 font-medium" : "text-red-500 font-medium"}>
+                          {commitDelta >= 0 ? "▲" : "▼"} {Math.abs(commitDelta)}% {commitDelta >= 0 ? "more" : "fewer"}
+                        </span>{" "}
+                        than the previous period ({overviewA.commits} vs {overviewB.commits}).
+                      </p>
+                      <p>
+                        PRs:{" "}
+                        <span className={prDelta >= 0 ? "text-green-600 font-medium" : "text-red-500 font-medium"}>
+                          {prDelta >= 0 ? "▲" : "▼"} {Math.abs(prDelta)}% {prDelta >= 0 ? "more" : "fewer"}
+                        </span>{" "}
+                        pull requests authored.
+                      </p>
+                      <p>
+                        Reviews:{" "}
+                        <span className={reviewDelta >= 0 ? "text-green-600 font-medium" : "text-red-500 font-medium"}>
+                          {reviewDelta >= 0 ? "▲" : "▼"} {Math.abs(reviewDelta)}%
+                        </span>{" "}
+                        code reviews given.
+                      </p>
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

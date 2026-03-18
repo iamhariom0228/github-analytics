@@ -231,4 +231,52 @@ public class AnalyticsController {
         UUID userId = UUID.fromString(principal.getUsername());
         return ResponseEntity.ok(ApiResponse.ok(analyticsService.getCommitTrendByRepo(userId, repoId, from, to)));
     }
+
+    @GetMapping("/repos/{repoId}/stars-forks-trend")
+    public ResponseEntity<ApiResponse<List<StarsForksSnapshotDto>>> getStarsForksTrend(
+            @AuthenticationPrincipal UserDetails principal,
+            @PathVariable UUID repoId) {
+        UUID userId = UUID.fromString(principal.getUsername());
+        return ResponseEntity.ok(ApiResponse.ok(analyticsService.getStarsForksTrend(userId, repoId)));
+    }
+
+    @GetMapping("/repos/{repoId}/release-trend")
+    public ResponseEntity<ApiResponse<List<ReleaseTrendDto>>> getReleaseTrend(
+            @AuthenticationPrincipal UserDetails principal,
+            @PathVariable UUID repoId) {
+        UUID userId = UUID.fromString(principal.getUsername());
+        return ResponseEntity.ok(ApiResponse.ok(analyticsService.getReleaseTrend(userId, repoId)));
+    }
+
+    @GetMapping("/repos/{repoId}/issues")
+    public ResponseEntity<ApiResponse<IssueAnalyticsDto>> getIssueAnalytics(
+            @AuthenticationPrincipal UserDetails principal,
+            @PathVariable UUID repoId) {
+        UUID userId = UUID.fromString(principal.getUsername());
+        return ResponseEntity.ok(ApiResponse.ok(analyticsService.getIssueAnalytics(userId, repoId)));
+    }
+
+    @GetMapping("/repos/{repoId}/language-bytes")
+    public ResponseEntity<ApiResponse<List<RepoLanguageDto>>> getLanguageBytes(
+            @AuthenticationPrincipal UserDetails principal,
+            @PathVariable UUID repoId) {
+        UUID userId = UUID.fromString(principal.getUsername());
+        return ResponseEntity.ok(ApiResponse.ok(analyticsService.getLanguageBytes(userId, repoId)));
+    }
+
+    @GetMapping("/compare/repos")
+    public ResponseEntity<ApiResponse<List<RepoCompareDto>>> compareRepos(
+            @AuthenticationPrincipal UserDetails principal,
+            @RequestParam List<UUID> repoIds) {
+        UUID userId = UUID.fromString(principal.getUsername());
+        return ResponseEntity.ok(ApiResponse.ok(analyticsService.compareRepos(userId, repoIds)));
+    }
+
+    @GetMapping("/compare/contributors")
+    public ResponseEntity<ApiResponse<List<ContributorCompareDto>>> compareContributors(
+            @AuthenticationPrincipal UserDetails principal,
+            @RequestParam List<String> logins) {
+        UUID userId = UUID.fromString(principal.getUsername());
+        return ResponseEntity.ok(ApiResponse.ok(analyticsService.compareContributors(userId, logins)));
+    }
 }

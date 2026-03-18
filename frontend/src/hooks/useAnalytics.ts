@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   getDashboard,
   getHeatmap,
@@ -21,6 +21,14 @@ import {
   getPRMergeRateTrend,
   getReviewerCoverage,
   getChurnLeaderboard,
+  getStarsForksTrend,
+  getReleaseTrend,
+  getIssueAnalytics,
+  getLanguageBytes,
+  compareRepos,
+  compareContributors,
+  createShare,
+  getPublicShare,
 } from "@/lib/api/client";
 
 // Analytics data changes infrequently — 5 min staleTime prevents refetch on every window focus
@@ -201,5 +209,75 @@ export function useChurnLeaderboard(repoId: string, from: string, to: string) {
     queryFn: () => getChurnLeaderboard(repoId, from, to),
     enabled: !!repoId,
     staleTime: ANALYTICS_STALE_MS,
+  });
+}
+
+export function useStarsForksTrend(repoId?: string) {
+  return useQuery({
+    queryKey: ["stars-forks-trend", repoId],
+    queryFn: () => getStarsForksTrend(repoId!),
+    enabled: !!repoId,
+    staleTime: ANALYTICS_STALE_MS,
+  });
+}
+
+export function useReleaseTrend(repoId?: string) {
+  return useQuery({
+    queryKey: ["release-trend", repoId],
+    queryFn: () => getReleaseTrend(repoId!),
+    enabled: !!repoId,
+    staleTime: ANALYTICS_STALE_MS,
+  });
+}
+
+export function useIssueAnalytics(repoId?: string) {
+  return useQuery({
+    queryKey: ["issue-analytics", repoId],
+    queryFn: () => getIssueAnalytics(repoId!),
+    enabled: !!repoId,
+    staleTime: ANALYTICS_STALE_MS,
+  });
+}
+
+export function useLanguageBytes(repoId?: string) {
+  return useQuery({
+    queryKey: ["language-bytes", repoId],
+    queryFn: () => getLanguageBytes(repoId!),
+    enabled: !!repoId,
+    staleTime: ANALYTICS_STALE_MS,
+  });
+}
+
+export function useCompareRepos(repoIds: string[]) {
+  return useQuery({
+    queryKey: ["compare-repos", ...repoIds],
+    queryFn: () => compareRepos(repoIds),
+    enabled: repoIds.length >= 2,
+    staleTime: ANALYTICS_STALE_MS,
+  });
+}
+
+export function useCompareContributors(logins: string[]) {
+  return useQuery({
+    queryKey: ["compare-contributors", ...logins],
+    queryFn: () => compareContributors(logins),
+    enabled: logins.filter(Boolean).length >= 2,
+    staleTime: ANALYTICS_STALE_MS,
+  });
+}
+
+export function useCreateShare() {
+  return useMutation({
+    mutationFn: ({ timezone, from, to }: { timezone?: string; from?: string; to?: string }) =>
+      createShare(timezone, from, to),
+  });
+}
+
+export function usePublicShare(token: string) {
+  return useQuery({
+    queryKey: ["public-share", token],
+    queryFn: () => getPublicShare(token),
+    enabled: !!token,
+    staleTime: 10 * 60 * 1000,
   });
 }
