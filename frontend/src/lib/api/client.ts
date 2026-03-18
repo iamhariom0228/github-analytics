@@ -48,6 +48,8 @@ import type {
   ActivityEvent,
   CollaborationData,
   PublicRepoStats,
+  PRMergeRatePoint,
+  ReviewerCoverage,
 } from "@/types";
 import type { ApiResponse } from "@/types";
 
@@ -203,4 +205,22 @@ export const getPublicRepoStats = (repoId: string) =>
 export const getRepoCommitTrend = (repoId: string, from: string, to: string) =>
   apiClient
     .get<ApiResponse<CommitTrendPoint[]>>(`/analytics/repos/${repoId}/commit-trend`, { params: { from, to } })
+    .then(unwrap);
+
+// PR Merge Rate Trend
+export const getPRMergeRateTrend = (from: string, to: string) =>
+  apiClient
+    .get<ApiResponse<PRMergeRatePoint[]>>("/analytics/prs/merge-rate-trend", { params: { from, to } })
+    .then(unwrap);
+
+// Reviewer Coverage
+export const getReviewerCoverage = (from: string, to: string) =>
+  apiClient
+    .get<ApiResponse<ReviewerCoverage>>("/analytics/prs/reviewer-coverage", { params: { from, to } })
+    .then(unwrap);
+
+// Churn Leaderboard
+export const getChurnLeaderboard = (repoId: string, from: string, to: string) =>
+  apiClient
+    .get<ApiResponse<ContributorStats[]>>("/analytics/team/churn", { params: { repoId, from, to } })
     .then(unwrap);

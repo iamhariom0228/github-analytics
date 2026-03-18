@@ -306,6 +306,64 @@ public interface AnalyticsRepository extends Repository<Commit, Long> {
             "GROUP BY author_login ORDER BY cnt DESC LIMIT 1")
     List<Object[]> getTopContributorByRepo(@Param("repoId") UUID repoId);
 
+    // ── PR Merge Rate Trend ───────────────────────────────────────────────────
+
+    @Query(nativeQuery = true, value = """
+            SELECT
+              TO_CHAR(DATE_TRUNC('week', pr.created_at), 'YYYY-MM-DD') AS week,
+              COUNT(*) AS total,
+              COUNT(*) FILTER (WHERE pr.merged_at IS NOT NULL) AS merged
+            FROM pull_requests pr
+            JOIN tracked_repos r ON pr.repo_id = r.id
+            WHERE r.user_id = :userId
+              AND (pr.author_login = :login OR (pr.author_login IS NULL AND r.owner = :login))
+              AND pr.created_at BETWEEN :from AND :to
+            GROUP BY DATE_TRUNC('week', pr.created_at)
+            ORDER BY DATE_TRUNC('week', pr.created_at) ASC
+            """)
+    List<Object[]> getPRMergeRateTrend(@Param("userId") UUID userId,
+                                       @Param("login") String login,
+                                       @Param("from") OffsetDateTime from,
+                                       @Param("to") OffsetDateTime to);
+
+    // ── Reviewer Coverage ─────────────────────────────────────────────────────
+
+    @Query(nativeQuery = true, value = """
+            SELECT
+              COUNT(DISTINCT pr.id) AS total_prs,
+              COUNT(DISTINCT rv.pr_id) AS reviewed_prs
+            FROM pull_requests pr
+            JOIN tracked_repos r ON pr.repo_id = r.id
+            LEFT JOIN pr_reviews rv ON rv.pr_id = pr.id
+            WHERE r.user_id = :userId
+              AND (pr.author_login = :login OR (pr.author_login IS NULL AND r.owner = :login))
+              AND pr.created_at BETWEEN :from AND :to
+            """)
+    Object[] getReviewerCoverageForUser(@Param("userId") UUID userId,
+                                        @Param("login") String login,
+                                        @Param("from") OffsetDateTime from,
+                                        @Param("to") OffsetDateTime to);
+
+    // ── Churn Leaderboard ─────────────────────────────────────────────────────
+
+    @Query(nativeQuery = true, value = """
+            SELECT c.author_login,
+                   COUNT(*) AS commits,
+                   CAST(SUM(c.additions) AS bigint) AS lines_added,
+                   CAST(SUM(c.deletions) AS bigint) AS lines_removed
+            FROM commits c
+            JOIN tracked_repos r ON c.repo_id = r.id
+            WHERE r.user_id = :userId AND r.id = :repoId
+              AND c.committed_at BETWEEN :from AND :to
+            GROUP BY c.author_login
+            ORDER BY (SUM(c.additions) + SUM(c.deletions)) DESC
+            LIMIT 20
+            """)
+    List<Object[]> getChurnLeaderboard(@Param("userId") UUID userId,
+                                       @Param("repoId") UUID repoId,
+                                       @Param("from") OffsetDateTime from,
+                                       @Param("to") OffsetDateTime to);
+
     // ── Collaboration ─────────────────────────────────────────────────────────
 
     @Query(nativeQuery = true, value = """

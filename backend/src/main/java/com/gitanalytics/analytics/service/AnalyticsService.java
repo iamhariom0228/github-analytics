@@ -540,6 +540,31 @@ public class AnalyticsService {
         return events.stream().limit(limit).toList();
     }
 
+    // ── Churn Leaderboard ─────────────────────────────────────────────────────
+
+    public List<ContributorStatsDto> getChurnLeaderboard(UUID userId, UUID repoId,
+                                                          OffsetDateTime from, OffsetDateTime to) {
+        return analyticsDao.getChurnLeaderboard(userId, repoId, from, to);
+    }
+
+    // ── PR Merge Rate Trend ───────────────────────────────────────────────────
+
+    public List<PRMergeRateDto> getPRMergeRateTrend(UUID userId, String login,
+                                                     OffsetDateTime from, OffsetDateTime to) {
+        return analyticsDao.getPRMergeRateTrend(userId, login, from, to);
+    }
+
+    // ── Reviewer Coverage ─────────────────────────────────────────────────────
+
+    public ReviewerCoverageDto getReviewerCoverage(UUID userId, String login,
+                                                    OffsetDateTime from, OffsetDateTime to) {
+        Object[] row = analyticsDao.getReviewerCoverageForUser(userId, login, from, to);
+        long totalPRs = row[0] != null ? ((Number) row[0]).longValue() : 0;
+        long reviewedPRs = row[1] != null ? ((Number) row[1]).longValue() : 0;
+        double pct = totalPRs > 0 ? (double) reviewedPRs / totalPRs * 100 : 0;
+        return new ReviewerCoverageDto(totalPRs, reviewedPRs, pct);
+    }
+
     // ── Collaboration ─────────────────────────────────────────────────────────
 
     public CollaborationDto getCollaboration(UUID userId, String login, OffsetDateTime from, OffsetDateTime to) {

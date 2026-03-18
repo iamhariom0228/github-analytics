@@ -18,19 +18,23 @@ import {
   Activity,
   GitPullRequestArrow,
   GitCompareArrows,
+  Network,
+  Keyboard,
 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import { logout } from "@/lib/api/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { ShortcutCheatsheet } from "./ShortcutCheatsheet";
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/repos", icon: GitBranch, label: "Repositories" },
   { href: "/analytics", icon: BarChart2, label: "Analytics" },
   { href: "/team", icon: Users, label: "Team" },
+  { href: "/collaboration", icon: Network, label: "Collaboration" },
   { href: "/review-queue", icon: GitPullRequestArrow, label: "Review Queue" },
   { href: "/compare", icon: GitCompareArrows, label: "Compare" },
   { href: "/feed", icon: Activity, label: "Activity Feed" },
@@ -46,8 +50,10 @@ export function Sidebar() {
   const { data: user } = useAuth();
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   useEffect(() => setMounted(true), []);
-  useKeyboardShortcuts();
+  const openShortcuts = useCallback(() => setShortcutsOpen(true), []);
+  useKeyboardShortcuts(openShortcuts);
 
   const logoutMutation = useMutation({
     mutationFn: logout,
@@ -58,6 +64,8 @@ export function Sidebar() {
   });
 
   return (
+    <>
+    <ShortcutCheatsheet open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
     <aside className="w-64 border-r border-border bg-card flex flex-col h-screen sticky top-0">
       {/* Brand */}
       <div className="p-6 border-b border-border flex items-center justify-between">
@@ -100,8 +108,16 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* Logout */}
-      <div className="p-4 border-t border-border">
+      {/* Logout + shortcuts */}
+      <div className="p-4 border-t border-border space-y-1">
+        <button
+          onClick={() => setShortcutsOpen(true)}
+          className="flex items-center gap-3 px-3 py-2 rounded-md text-sm text-muted-foreground hover:bg-accent hover:text-foreground w-full transition-colors"
+        >
+          <Keyboard className="w-4 h-4" />
+          Shortcuts
+          <kbd className="ml-auto text-xs border border-border rounded px-1 font-mono">?</kbd>
+        </button>
         <button
           onClick={() => logoutMutation.mutate()}
           className="flex items-center gap-3 px-3 py-2 rounded-md text-sm text-muted-foreground hover:bg-accent hover:text-foreground w-full transition-colors"
@@ -111,5 +127,6 @@ export function Sidebar() {
         </button>
       </div>
     </aside>
+    </>
   );
 }

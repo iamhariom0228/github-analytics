@@ -2,7 +2,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-export function useKeyboardShortcuts() {
+export function useKeyboardShortcuts(onShowShortcuts?: () => void) {
   const router = useRouter();
 
   useEffect(() => {
@@ -38,9 +38,12 @@ export function useKeyboardShortcuts() {
         case "e":
           router.push("/explore");
           break;
+        case "?":
+          onShowShortcuts?.();
+          break;
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [router]);
+  }, [router, onShowShortcuts]);
 }

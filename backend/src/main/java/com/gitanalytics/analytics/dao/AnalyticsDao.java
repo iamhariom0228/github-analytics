@@ -3,6 +3,8 @@ package com.gitanalytics.analytics.dao;
 import com.gitanalytics.analytics.dto.CommitTrendDto;
 import com.gitanalytics.analytics.dto.ContributorStatsDto;
 import com.gitanalytics.analytics.dto.HeatmapCellDto;
+import com.gitanalytics.analytics.dto.PRMergeRateDto;
+import com.gitanalytics.analytics.dto.ReviewerCoverageDto;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -65,6 +67,18 @@ public interface AnalyticsDao {
 
     // AI summary helper
     long countOpenStalePRsOlderThan(UUID userId, String intervalDays);
+
+    // PR merge rate trend — weekly merged/total
+    List<PRMergeRateDto> getPRMergeRateTrend(UUID userId, String login,
+                                              OffsetDateTime from, OffsetDateTime to);
+
+    // Reviewer coverage — % of user's PRs that received at least one review
+    Object[] getReviewerCoverageForUser(UUID userId, String login,
+                                        OffsetDateTime from, OffsetDateTime to);
+
+    // Churn leaderboard — ranked by total lines changed (additions + deletions)
+    List<ContributorStatsDto> getChurnLeaderboard(UUID userId, UUID repoId,
+                                                   OffsetDateTime from, OffsetDateTime to);
 
     // Collaboration
     List<Object[]> getTopReviewersOfMyPRs(UUID userId, String login, OffsetDateTime from, OffsetDateTime to);

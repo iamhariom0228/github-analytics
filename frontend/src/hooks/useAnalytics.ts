@@ -18,6 +18,9 @@ import {
   getCollaboration,
   getPublicRepoStats,
   getRepoCommitTrend,
+  getPRMergeRateTrend,
+  getReviewerCoverage,
+  getChurnLeaderboard,
 } from "@/lib/api/client";
 
 // Analytics data changes infrequently — 5 min staleTime prevents refetch on every window focus
@@ -172,6 +175,31 @@ export function useActivityFeed(limit = 40) {
   return useQuery({
     queryKey: ["activity-feed", limit],
     queryFn: () => getActivityFeed(limit),
+    staleTime: ANALYTICS_STALE_MS,
+  });
+}
+
+export function usePRMergeRateTrend(from: string, to: string) {
+  return useQuery({
+    queryKey: ["pr-merge-rate-trend", from, to],
+    queryFn: () => getPRMergeRateTrend(from, to),
+    staleTime: ANALYTICS_STALE_MS,
+  });
+}
+
+export function useReviewerCoverage(from: string, to: string) {
+  return useQuery({
+    queryKey: ["reviewer-coverage", from, to],
+    queryFn: () => getReviewerCoverage(from, to),
+    staleTime: ANALYTICS_STALE_MS,
+  });
+}
+
+export function useChurnLeaderboard(repoId: string, from: string, to: string) {
+  return useQuery({
+    queryKey: ["churn-leaderboard", repoId, from, to],
+    queryFn: () => getChurnLeaderboard(repoId, from, to),
+    enabled: !!repoId,
     staleTime: ANALYTICS_STALE_MS,
   });
 }

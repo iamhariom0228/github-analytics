@@ -179,6 +179,38 @@ public class AnalyticsController {
         return ResponseEntity.ok(ApiResponse.ok(analyticsService.getReviewQueue(userId)));
     }
 
+    @GetMapping("/prs/merge-rate-trend")
+    public ResponseEntity<ApiResponse<List<PRMergeRateDto>>> getPRMergeRateTrend(
+            @AuthenticationPrincipal UserDetails principal,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to) {
+        UUID userId = UUID.fromString(principal.getUsername());
+        String login = userRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found")).getUsername();
+        return ResponseEntity.ok(ApiResponse.ok(analyticsService.getPRMergeRateTrend(userId, login, from, to)));
+    }
+
+    @GetMapping("/prs/reviewer-coverage")
+    public ResponseEntity<ApiResponse<ReviewerCoverageDto>> getReviewerCoverage(
+            @AuthenticationPrincipal UserDetails principal,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to) {
+        UUID userId = UUID.fromString(principal.getUsername());
+        String login = userRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found")).getUsername();
+        return ResponseEntity.ok(ApiResponse.ok(analyticsService.getReviewerCoverage(userId, login, from, to)));
+    }
+
+    @GetMapping("/team/churn")
+    public ResponseEntity<ApiResponse<List<ContributorStatsDto>>> getChurnLeaderboard(
+            @AuthenticationPrincipal UserDetails principal,
+            @RequestParam UUID repoId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to) {
+        UUID userId = UUID.fromString(principal.getUsername());
+        return ResponseEntity.ok(ApiResponse.ok(analyticsService.getChurnLeaderboard(userId, repoId, from, to)));
+    }
+
     @GetMapping("/collaboration")
     public ResponseEntity<ApiResponse<CollaborationDto>> getCollaboration(
             @AuthenticationPrincipal UserDetails principal,

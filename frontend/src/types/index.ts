@@ -183,6 +183,19 @@ export interface PublicRepoStats {
   isPublic: boolean;
 }
 
+export interface PRMergeRatePoint {
+  week: string;
+  total: number;
+  merged: number;
+  mergeRate: number;
+}
+
+export interface ReviewerCoverage {
+  totalPRs: number;
+  reviewedPRs: number;
+  coveragePct: number;
+}
+
 export interface ActivityEvent {
   type: "COMMIT" | "PR_OPENED" | "PR_MERGED" | "PR_CLOSED";
   title: string;

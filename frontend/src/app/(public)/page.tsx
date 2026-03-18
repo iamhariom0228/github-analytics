@@ -23,12 +23,20 @@ export default function LandingPage() {
           PR lifecycle timing, contribution heatmaps, team leaderboards, review turnaround metrics,
           bus-factor detection, and weekly email digests — all in one dashboard.
         </p>
-        <a
-          href="/api/backend/auth/github"
-          className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-lg text-lg font-semibold transition"
-        >
-          Connect GitHub for free
-        </a>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <a
+            href="/api/backend/auth/github"
+            className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-lg text-lg font-semibold transition"
+          >
+            Connect GitHub for free
+          </a>
+          <a
+            href="/api/backend/dev/demo-login"
+            className="inline-block bg-white/10 hover:bg-white/20 border border-white/20 text-white px-8 py-4 rounded-lg text-lg font-semibold transition"
+          >
+            Try Demo
+          </a>
+        </div>
       </section>
 
       {/* Feature grid */}

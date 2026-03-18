@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRepos } from "@/hooks/useRepos";
-import { useLeaderboard, useBusFactor, useStalePRs } from "@/hooks/useAnalytics";
+import { useLeaderboard, useBusFactor, useStalePRs, useChurnLeaderboard } from "@/hooks/useAnalytics";
 import { DateRangePicker, usePresetDates, useDatePreset } from "@/components/shared/DateRangePicker";
 import { AlertTriangle } from "lucide-react";
 import { Skeleton } from "@/components/shared/Skeleton";
@@ -26,7 +26,9 @@ export default function TeamPage() {
 
   const repoId = selectedRepoId || repos?.[0]?.id || "";
 
+  const [leaderboardMode, setLeaderboardMode] = useState<"commits" | "churn">("commits");
   const { data: leaderboard, isLoading: lbLoading } = useLeaderboard(repoId, from, to);
+  const { data: churnData, isLoading: churnLoading } = useChurnLeaderboard(repoId, from, to);
   const { data: busFactor, isLoading: bfLoading } = useBusFactor(repoId);
   const { data: stalePRs, isLoading: staleLoading } = useStalePRs(repoId, 7);
 
@@ -80,7 +82,31 @@ export default function TeamPage() {
       )}
 
       <BusFactorCard busFactor={busFactor} isLoading={bfLoading} />
-      <LeaderboardTable leaderboard={leaderboard} isLoading={lbLoading} />
+
+      <div className="bg-card border border-border rounded-xl p-6 space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h2 className="font-semibold">Contributor Leaderboard</h2>
+          <div className="flex rounded-lg border border-border overflow-hidden text-xs font-medium">
+            <button
+              onClick={() => setLeaderboardMode("commits")}
+              className={`px-3 py-1.5 transition-colors ${leaderboardMode === "commits" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted text-muted-foreground"}`}
+            >
+              By Commits
+            </button>
+            <button
+              onClick={() => setLeaderboardMode("churn")}
+              className={`px-3 py-1.5 transition-colors ${leaderboardMode === "churn" ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted text-muted-foreground"}`}
+            >
+              By Code Churn
+            </button>
+          </div>
+        </div>
+        {leaderboardMode === "commits" ? (
+          <LeaderboardTable leaderboard={leaderboard} isLoading={lbLoading} hideHeader />
+        ) : (
+          <LeaderboardTable leaderboard={churnData} isLoading={churnLoading} hideHeader churnMode />
+        )}
+      </div>
 
       {/* Lines changed per contributor */}
       {!lbLoading && (leaderboard?.length ?? 0) >= 2 && (() => {

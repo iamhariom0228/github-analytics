@@ -4,6 +4,8 @@ import com.gitanalytics.analytics.dao.AnalyticsDao;
 import com.gitanalytics.analytics.dto.CommitTrendDto;
 import com.gitanalytics.analytics.dto.ContributorStatsDto;
 import com.gitanalytics.analytics.dto.HeatmapCellDto;
+import com.gitanalytics.analytics.dto.PRMergeRateDto;
+import com.gitanalytics.analytics.dto.ReviewerCoverageDto;
 import com.gitanalytics.analytics.repository.AnalyticsRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
@@ -219,6 +221,43 @@ public class AnalyticsDaoImpl implements AnalyticsDao {
     public long countOpenStalePRsOlderThan(UUID userId, String intervalDays) {
         OffsetDateTime cutoff = OffsetDateTime.now().minusDays(Long.parseLong(intervalDays));
         return analyticsRepository.countOpenStalePRs(userId, cutoff);
+    }
+
+    // ── Churn Leaderboard ─────────────────────────────────────────────────────
+
+    @Override
+    public List<ContributorStatsDto> getChurnLeaderboard(UUID userId, UUID repoId,
+                                                          OffsetDateTime from, OffsetDateTime to) {
+        return analyticsRepository.getChurnLeaderboard(userId, repoId, from, to).stream()
+                .map(r -> new ContributorStatsDto(
+                        (String) r[0],
+                        ((Number) r[1]).longValue(),
+                        r[2] != null ? ((Number) r[2]).longValue() : 0,
+                        r[3] != null ? ((Number) r[3]).longValue() : 0))
+                .toList();
+    }
+
+    // ── PR Merge Rate Trend ───────────────────────────────────────────────────
+
+    @Override
+    public List<PRMergeRateDto> getPRMergeRateTrend(UUID userId, String login,
+                                                    OffsetDateTime from, OffsetDateTime to) {
+        return analyticsRepository.getPRMergeRateTrend(userId, login, from, to).stream()
+                .map(r -> {
+                    long total = ((Number) r[1]).longValue();
+                    long merged = ((Number) r[2]).longValue();
+                    double rate = total > 0 ? (double) merged / total * 100 : 0;
+                    return new PRMergeRateDto((String) r[0], total, merged, rate);
+                })
+                .toList();
+    }
+
+    // ── Reviewer Coverage ─────────────────────────────────────────────────────
+
+    @Override
+    public Object[] getReviewerCoverageForUser(UUID userId, String login,
+                                               OffsetDateTime from, OffsetDateTime to) {
+        return firstRow(analyticsRepository.getReviewerCoverageForUser(userId, login, from, to));
     }
 
     // ── Collaboration ─────────────────────────────────────────────────────────

@@ -4,10 +4,14 @@ import { useState } from "react";
 import {
   useHeatmap, usePRLifecycle, usePRSizeDistribution,
   useReviewsSummary, useCommitTrend, useOverview,
+  usePRMergeRateTrend, useReviewerCoverage,
 } from "@/hooks/useAnalytics";
 import { useRepos } from "@/hooks/useRepos";
 import { DateRangePicker, usePresetDates, useDatePreset } from "@/components/shared/DateRangePicker";
-import { TrendingUp, GitPullRequest, Star, Code2 } from "lucide-react";
+import { TrendingUp, GitPullRequest, Star, Code2, ShieldCheck } from "lucide-react";
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+} from "recharts";
 import { StatCard } from "./_components/StatCard";
 import { CommitTrendChart } from "./_components/CommitTrendChart";
 import { ContributionHeatmapSection } from "./_components/ContributionHeatmapSection";
@@ -31,6 +35,8 @@ export default function AnalyticsPage() {
   const { data: lifecycle, isLoading: lifecycleLoading } = usePRLifecycle(from, to);
   const { data: sizeData, isLoading: sizeLoading } = usePRSizeDistribution(from, to);
   const { data: reviews, isLoading: reviewsLoading } = useReviewsSummary(from, to);
+  const { data: mergeRateTrend, isLoading: mergeRateLoading } = usePRMergeRateTrend(from, to);
+  const { data: reviewerCoverage } = useReviewerCoverage(from, to);
 
   const trendChartData = (trend ?? []).map((p) => {
     const d = new Date(p.date);
@@ -87,12 +93,62 @@ export default function AnalyticsPage() {
       )}
 
       {tab === "Pull Requests" && (
-        <PRLifecycleSection
-          lifecycle={lifecycle}
-          lifecycleLoading={lifecycleLoading}
-          sizeChartData={sizeChartData}
-          sizeLoading={sizeLoading}
-        />
+        <div className="space-y-4">
+          <PRLifecycleSection
+            lifecycle={lifecycle}
+            lifecycleLoading={lifecycleLoading}
+            sizeChartData={sizeChartData}
+            sizeLoading={sizeLoading}
+          />
+
+          {/* Reviewer Coverage card */}
+          {reviewerCoverage && (
+            <div className="bg-card border border-border rounded-xl p-6 flex items-center gap-5">
+              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <ShieldCheck className="w-6 h-6 text-primary" />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Reviewer Coverage</p>
+                <p className="text-2xl font-bold">{reviewerCoverage.coveragePct.toFixed(0)}%</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {reviewerCoverage.reviewedPRs} of {reviewerCoverage.totalPRs} PRs received at least one review
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* PR Merge Rate Trend chart */}
+          {!mergeRateLoading && (mergeRateTrend?.length ?? 0) > 0 && (
+            <div className="bg-card border border-border rounded-xl p-6">
+              <h2 className="font-semibold mb-1">PR Merge Rate Over Time</h2>
+              <p className="text-xs text-muted-foreground mb-5">Weekly merge rate (%) for your pull requests.</p>
+              <ResponsiveContainer width="100%" height={240}>
+                <AreaChart data={mergeRateTrend!.map((p) => ({
+                  week: p.week,
+                  "Merge Rate %": Math.round(p.mergeRate),
+                  Total: p.total,
+                  Merged: p.merged,
+                }))} margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="mr-grad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="week" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} unit="%" />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }}
+                    formatter={(v: number, name: string) => [name === "Merge Rate %" ? `${v}%` : v, name]}
+                  />
+                  <Legend wrapperStyle={{ fontSize: "12px" }} />
+                  <Area type="monotone" dataKey="Merge Rate %" stroke="hsl(var(--primary))" fill="url(#mr-grad)" strokeWidth={2} dot={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
       )}
 
       {tab === "Reviews" && (
