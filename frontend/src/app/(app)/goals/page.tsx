@@ -76,16 +76,11 @@ function GoalRow({ label, icon, current, target, unit, color, onEdit }: GoalRowP
           <div className="min-w-0">
             <div className="font-semibold text-sm">{label}</div>
             <div className="text-xs text-muted-foreground mt-0.5">{format(new Date(), "MMMM")} target</div>
-            {done && (
-              <span className="inline-flex items-center gap-1 bg-green-500/15 text-green-600 text-xs font-medium px-2 py-0.5 rounded-full mt-1.5 w-fit">
-                <Trophy className="w-3 h-3" /> Goal met!
-              </span>
-            )}
           </div>
         </div>
 
         {editing ? (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <input
               type="number"
               value={draft}
@@ -105,7 +100,7 @@ function GoalRow({ label, icon, current, target, unit, color, onEdit }: GoalRowP
         ) : (
           <button
             onClick={() => { setDraft(String(target)); setEditing(true); }}
-            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition"
+            className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition shrink-0"
           >
             <Pencil className="w-3.5 h-3.5" />
             Edit
@@ -128,9 +123,15 @@ function GoalRow({ label, icon, current, target, unit, color, onEdit }: GoalRowP
           {current.toLocaleString()}
           <span className="text-muted-foreground font-normal"> {unit}</span>
         </span>
-        <span className="text-muted-foreground text-xs">
-          {pct}% of {target.toLocaleString()} {unit}
-        </span>
+        {done ? (
+          <span className="inline-flex items-center gap-1 bg-green-500/15 text-green-600 text-xs font-medium px-2 py-0.5 rounded-full">
+            <Trophy className="w-3 h-3" /> Goal met!
+          </span>
+        ) : (
+          <span className="text-muted-foreground text-xs">
+            {pct}% of {target.toLocaleString()} {unit}
+          </span>
+        )}
       </div>
 
       {/* Projection */}
