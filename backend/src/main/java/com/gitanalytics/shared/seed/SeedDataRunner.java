@@ -1,18 +1,16 @@
 package com.gitanalytics.shared.seed;
 
 import com.gitanalytics.auth.entity.User;
-import com.gitanalytics.auth.entity.UserPreferences;
-import com.gitanalytics.auth.repository.UserPreferencesRepository;
 import com.gitanalytics.auth.repository.UserRepository;
 import com.gitanalytics.ingestion.entity.*;
 import com.gitanalytics.ingestion.repository.*;
-import com.gitanalytics.shared.util.EncryptionUtil;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.time.OffsetDateTime;
@@ -21,70 +19,47 @@ import java.util.*;
 @Slf4j
 @Component
 @Profile("dev")
+@Order(2) // run after DemoUserInitializer (order 1)
 @RequiredArgsConstructor
 public class SeedDataRunner implements CommandLineRunner {
 
     private final UserRepository userRepository;
-    private final UserPreferencesRepository userPreferencesRepository;
     private final TrackedRepoRepository trackedRepoRepository;
     private final CommitRepository commitRepository;
     private final PullRequestRepository pullRequestRepository;
     private final PrReviewRepository prReviewRepository;
-    private final EncryptionUtil encryptionUtil;
     private final EntityManager em;
-
-    private static final long DEMO_GITHUB_ID = 999_999L;
 
     @Override
     @Transactional
     public void run(String... args) {
-        boolean fullySeeded = userRepository.findByGithubId(DEMO_GITHUB_ID)
-            .map(u -> {
-                List<com.gitanalytics.ingestion.entity.TrackedRepo> repos =
-                    trackedRepoRepository.findByUserId(u.getId());
-                if (repos.isEmpty()) return false;
-                long commitCount = commitRepository.countByRepoId(repos.get(0).getId());
-                return commitCount > 0;
-            }).orElse(false);
+        User user = userRepository.findByGithubId(DemoUserInitializer.DEMO_GITHUB_ID)
+                .orElseThrow(() -> new IllegalStateException("Demo user missing — DemoUserInitializer should have created it"));
+
+        boolean fullySeeded = !trackedRepoRepository.findByUserId(user.getId()).isEmpty()
+                && trackedRepoRepository.findByUserId(user.getId()).stream()
+                .anyMatch(r -> commitRepository.countByRepoId(r.getId()) > 0);
 
         if (fullySeeded) {
             log.info("Demo seed data already exists — skipping.");
             return;
         }
 
-        // Partial seed detected — delete existing partial data so we start fresh
-        userRepository.findByGithubId(DEMO_GITHUB_ID).ifPresent(u -> {
+        // Clean up any partial repo/commit/PR data
+        trackedRepoRepository.findByUserId(user.getId()).forEach(r -> {
             log.info("Partial seed detected — cleaning up before re-seeding...");
-            trackedRepoRepository.findByUserId(u.getId())
-                .forEach(r -> {
-                    prReviewRepository.deleteByPullRequestRepoId(r.getId());
-                    pullRequestRepository.deleteByRepoId(r.getId());
-                    commitRepository.deleteByRepoId(r.getId());
-                    trackedRepoRepository.delete(r);
-                });
-            userPreferencesRepository.deleteByUserId(u.getId());
-            userRepository.delete(u);
+            prReviewRepository.deleteByPullRequestRepoId(r.getId());
+            pullRequestRepository.deleteByRepoId(r.getId());
+            commitRepository.deleteByRepoId(r.getId());
+            trackedRepoRepository.delete(r);
         });
         em.flush();
         em.clear();
 
+        // Re-fetch user after flush
+        user = userRepository.findByGithubId(DemoUserInitializer.DEMO_GITHUB_ID).orElseThrow();
+
         log.info("Seeding demo data for local development...");
-
-        User user = userRepository.save(User.builder()
-            .githubId(DEMO_GITHUB_ID)
-            .username("demo-user")
-            .email("demo@example.com")
-            .avatarUrl("https://avatars.githubusercontent.com/u/583231")
-            .accessTokenEncrypted(encryptionUtil.encrypt("demo-token-not-real-do-not-use"))
-            .build());
-
-        userPreferencesRepository.save(UserPreferences.builder()
-            .user(user)
-            .digestEnabled(true)
-            .digestDayOfWeek(1)
-            .digestHour(9)
-            .timezone("UTC")
-            .build());
 
         TrackedRepo repo1 = trackedRepoRepository.save(TrackedRepo.builder()
             .user(user).owner("demo-user").name("spring-petclinic")
@@ -120,7 +95,7 @@ public class SeedDataRunner implements CommandLineRunner {
                     .repo(repo)
                     .sha(UUID.randomUUID().toString().replace("-", "") + "00000000")
                     .authorLogin("demo-user")
-                    .authorGithubId(DEMO_GITHUB_ID)
+                    .authorGithubId(DemoUserInitializer.DEMO_GITHUB_ID)
                     .messageSummary(pickRandom(COMMIT_MESSAGES, rng))
                     .additions(10 + rng.nextInt(200))
                     .deletions(rng.nextInt(80))
