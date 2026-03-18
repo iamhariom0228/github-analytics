@@ -55,7 +55,10 @@ function CollabChart({
         <XAxis type="number" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} allowDecimals={false} />
         <YAxis type="category" dataKey="login" width={90} tick={{ fontSize: 12, fill: "hsl(var(--foreground))" }} tickLine={false} axisLine={false} />
         <ReTooltip
+          cursor={false}
           contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }}
+          labelStyle={{ color: "hsl(var(--foreground))" }}
+          itemStyle={{ color: "hsl(var(--foreground))" }}
           formatter={(v: number) => [v, "reviews"]}
         />
         <Bar dataKey="count" radius={[0, 6, 6, 0]} maxBarSize={28}>
