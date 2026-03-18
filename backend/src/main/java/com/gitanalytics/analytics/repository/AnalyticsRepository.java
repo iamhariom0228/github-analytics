@@ -305,4 +305,49 @@ public interface AnalyticsRepository extends Repository<Commit, Long> {
             "SELECT author_login, COUNT(*) cnt FROM commits WHERE repo_id = :repoId " +
             "GROUP BY author_login ORDER BY cnt DESC LIMIT 1")
     List<Object[]> getTopContributorByRepo(@Param("repoId") UUID repoId);
+
+    // ── Collaboration ─────────────────────────────────────────────────────────
+
+    @Query(nativeQuery = true, value = """
+            SELECT r.reviewer_login, COUNT(*) AS cnt
+            FROM pr_reviews r
+            JOIN pull_requests pr ON r.pr_id = pr.id
+            JOIN tracked_repos tr ON pr.repo_id = tr.id
+            WHERE tr.user_id = :userId
+              AND pr.author_login = :login
+              AND r.reviewer_login <> :login
+              AND r.submitted_at BETWEEN :from AND :to
+            GROUP BY r.reviewer_login
+            ORDER BY cnt DESC
+            LIMIT 10
+            """)
+    List<Object[]> getTopReviewersOfMyPRs(@Param("userId") UUID userId, @Param("login") String login,
+                                          @Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to);
+
+    @Query(nativeQuery = true, value = """
+            SELECT pr.author_login, COUNT(*) AS cnt
+            FROM pr_reviews r
+            JOIN pull_requests pr ON r.pr_id = pr.id
+            JOIN tracked_repos tr ON pr.repo_id = tr.id
+            WHERE tr.user_id = :userId
+              AND r.reviewer_login = :login
+              AND pr.author_login <> :login
+              AND r.submitted_at BETWEEN :from AND :to
+            GROUP BY pr.author_login
+            ORDER BY cnt DESC
+            LIMIT 10
+            """)
+    List<Object[]> getTopPeopleIReview(@Param("userId") UUID userId, @Param("login") String login,
+                                       @Param("from") OffsetDateTime from, @Param("to") OffsetDateTime to);
+
+    // ── Repo Commit Trend ─────────────────────────────────────────────────────
+
+    @Query(nativeQuery = true, value =
+            "SELECT DATE_TRUNC('day', c.committed_at) AS day, COUNT(*) AS cnt " +
+            "FROM commits c WHERE c.repo_id = :repoId " +
+            "AND c.committed_at BETWEEN :from AND :to " +
+            "GROUP BY day ORDER BY day ASC")
+    List<Object[]> getCommitTrendByRepo(@Param("repoId") UUID repoId,
+                                        @Param("from") OffsetDateTime from,
+                                        @Param("to") OffsetDateTime to);
 }

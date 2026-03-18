@@ -30,4 +30,14 @@ public interface PullRequestRepository extends JpaRepository<PullRequest, Long> 
     @Query("SELECT pr FROM PullRequest pr WHERE pr.repo.id = :repoId " +
            "AND pr.state = 'OPEN' AND pr.createdAt < :before ORDER BY pr.createdAt ASC")
     List<PullRequest> findStalePRs(UUID repoId, OffsetDateTime before);
+
+    @Query("SELECT pr FROM PullRequest pr WHERE pr.repo.user.id = :userId " +
+           "AND pr.authorLogin = :login ORDER BY pr.createdAt DESC LIMIT :limit")
+    List<PullRequest> findRecentByUser(UUID userId, String login, int limit);
+
+    @Query("SELECT pr FROM PullRequest pr WHERE pr.repo.user.id = :userId " +
+           "AND pr.state = 'OPEN' AND pr.authorLogin <> :login " +
+           "AND pr.id NOT IN (SELECT r.pullRequest.id FROM PrReview r WHERE r.reviewerLogin = :login) " +
+           "ORDER BY pr.createdAt ASC")
+    List<PullRequest> findReviewQueue(UUID userId, String login);
 }

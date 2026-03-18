@@ -38,6 +38,11 @@ public class CommitDaoImpl implements CommitDao {
     }
 
     @Override
+    public List<Commit> findRecentByUser(UUID userId, String login, int limit) {
+        return commitRepository.findRecentByUser(userId, login, limit);
+    }
+
+    @Override
     public void deleteByRepoId(UUID repoId) {
         commitRepository.deleteByRepoId(repoId);
     }

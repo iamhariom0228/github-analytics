@@ -4,8 +4,10 @@ import com.gitanalytics.analytics.dao.AnalyticsDao;
 import com.gitanalytics.analytics.dto.*;
 import com.gitanalytics.auth.dao.UserDao;
 import com.gitanalytics.auth.entity.User;
+import com.gitanalytics.ingestion.dao.CommitDao;
 import com.gitanalytics.ingestion.dao.PullRequestDao;
 import com.gitanalytics.ingestion.dao.ReleaseDao;
+import com.gitanalytics.ingestion.entity.Commit;
 import com.gitanalytics.ingestion.dao.TrackedRepoDao;
 import com.gitanalytics.ingestion.entity.PullRequest;
 import com.gitanalytics.shared.client.GroqApiClient;
@@ -26,6 +28,7 @@ public class AnalyticsService {
 
     private final AnalyticsDao analyticsDao;
     private final UserDao userDao;
+    private final CommitDao commitDao;
     private final PullRequestDao pullRequestDao;
     private final ReleaseDao releaseDao;
     private final TrackedRepoDao trackedRepoDao;
@@ -484,5 +487,117 @@ public class AnalyticsService {
         return summary != null
             ? new AiSummaryDto(summary, true)
             : new AiSummaryDto("Could not generate summary at this time.", false);
+    }
+
+    // ── Activity Feed ─────────────────────────────────────────────────────────
+
+    public List<ActivityEvent> getActivityFeed(UUID userId, int limit) {
+        User user = userDao.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        String login = user.getUsername();
+
+        int half = Math.max(1, limit / 2);
+
+        List<Commit> commits = commitDao.findRecentByUser(userId, login, half);
+        List<PullRequest> prs = pullRequestDao.findRecentByUser(userId, login, half);
+
+        List<ActivityEvent> events = new ArrayList<>();
+
+        for (Commit c : commits) {
+            events.add(ActivityEvent.builder()
+                .type("COMMIT")
+                .title(c.getMessageSummary())
+                .repoFullName(c.getRepo().getFullName())
+                .sha(c.getSha())
+                .prNumber(null)
+                .state(null)
+                .linesAdded(c.getAdditions())
+                .linesRemoved(c.getDeletions())
+                .occurredAt(c.getCommittedAt().toString())
+                .build());
+        }
+
+        for (PullRequest pr : prs) {
+            String type = switch (pr.getState()) {
+                case MERGED -> "PR_MERGED";
+                case CLOSED -> "PR_CLOSED";
+                default -> "PR_OPENED";
+            };
+            events.add(ActivityEvent.builder()
+                .type(type)
+                .title(pr.getTitle())
+                .repoFullName(pr.getRepo().getFullName())
+                .sha(null)
+                .prNumber(pr.getPrNumber())
+                .state(pr.getState().name())
+                .linesAdded(null)
+                .linesRemoved(null)
+                .occurredAt(pr.getCreatedAt().toString())
+                .build());
+        }
+
+        events.sort(Comparator.comparing(ActivityEvent::getOccurredAt).reversed());
+        return events.stream().limit(limit).toList();
+    }
+
+    // ── Collaboration ─────────────────────────────────────────────────────────
+
+    public CollaborationDto getCollaboration(UUID userId, String login, OffsetDateTime from, OffsetDateTime to) {
+        List<CollaborationDto.CollaboratorEntry> reviewersOfMe = analyticsDao
+            .getTopReviewersOfMyPRs(userId, login, from, to).stream()
+            .map(r -> new CollaborationDto.CollaboratorEntry((String) r[0], ((Number) r[1]).longValue()))
+            .toList();
+
+        List<CollaborationDto.CollaboratorEntry> iReviewFor = analyticsDao
+            .getTopPeopleIReview(userId, login, from, to).stream()
+            .map(r -> new CollaborationDto.CollaboratorEntry((String) r[0], ((Number) r[1]).longValue()))
+            .toList();
+
+        return new CollaborationDto(reviewersOfMe, iReviewFor);
+    }
+
+    // ── Repo Commit Trend ─────────────────────────────────────────────────────
+
+    public List<CommitTrendDto> getCommitTrendByRepo(UUID userId, UUID repoId, OffsetDateTime from, OffsetDateTime to) {
+        trackedRepoDao.findById(repoId)
+            .filter(r -> r.getUser().getId().equals(userId))
+            .orElseThrow(() -> new ResourceNotFoundException("Repository not found"));
+        return analyticsDao.getCommitTrendByRepo(repoId, from, to);
+    }
+
+    // ── Review Queue ───────────────────────────────────────────────────────────
+
+    public List<ReviewQueueItem> getReviewQueue(UUID userId) {
+        User user = userDao.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        String login = user.getUsername();
+
+        List<PullRequest> prs = pullRequestDao.findReviewQueue(userId, login);
+
+        return prs.stream().map(pr -> {
+            int total = pr.getAdditions() + pr.getDeletions();
+            String sizeLabel;
+            if (total < 10)       sizeLabel = "XS";
+            else if (total < 50)  sizeLabel = "S";
+            else if (total < 200) sizeLabel = "M";
+            else if (total < 500) sizeLabel = "L";
+            else                  sizeLabel = "XL";
+
+            long ageHours = java.time.Duration.between(pr.getCreatedAt(), OffsetDateTime.now()).toHours();
+
+            return ReviewQueueItem.builder()
+                .id(pr.getId())
+                .prNumber(pr.getPrNumber())
+                .title(pr.getTitle())
+                .repoFullName(pr.getRepo().getFullName())
+                .authorLogin(pr.getAuthorLogin())
+                .createdAt(pr.getCreatedAt().toString())
+                .additions(pr.getAdditions())
+                .deletions(pr.getDeletions())
+                .changedFiles(pr.getChangedFiles())
+                .ageHours(ageHours)
+                .sizeLabel(sizeLabel)
+                .build();
+        }).toList();
     }
 }

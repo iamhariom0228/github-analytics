@@ -220,4 +220,34 @@ public class AnalyticsDaoImpl implements AnalyticsDao {
         OffsetDateTime cutoff = OffsetDateTime.now().minusDays(Long.parseLong(intervalDays));
         return analyticsRepository.countOpenStalePRs(userId, cutoff);
     }
+
+    // ── Collaboration ─────────────────────────────────────────────────────────
+
+    @Override
+    public List<Object[]> getTopReviewersOfMyPRs(UUID userId, String login, OffsetDateTime from, OffsetDateTime to) {
+        return analyticsRepository.getTopReviewersOfMyPRs(userId, login, from, to);
+    }
+
+    @Override
+    public List<Object[]> getTopPeopleIReview(UUID userId, String login, OffsetDateTime from, OffsetDateTime to) {
+        return analyticsRepository.getTopPeopleIReview(userId, login, from, to);
+    }
+
+    // ── Repo Commit Trend ─────────────────────────────────────────────────────
+
+    @Override
+    public List<CommitTrendDto> getCommitTrendByRepo(UUID repoId, OffsetDateTime from, OffsetDateTime to) {
+        return analyticsRepository.getCommitTrendByRepo(repoId, from, to).stream()
+                .map(r -> {
+                    String date;
+                    if (r[0] instanceof java.sql.Timestamp ts)
+                        date = ts.toInstant().atOffset(ZoneOffset.UTC).toLocalDate().toString();
+                    else if (r[0] instanceof java.time.Instant inst)
+                        date = inst.atOffset(ZoneOffset.UTC).toLocalDate().toString();
+                    else
+                        date = r[0].toString().substring(0, 10);
+                    return new CommitTrendDto(date, ((Number) r[1]).longValue());
+                })
+                .toList();
+    }
 }

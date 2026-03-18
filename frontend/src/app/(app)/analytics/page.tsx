@@ -5,6 +5,7 @@ import {
   useHeatmap, usePRLifecycle, usePRSizeDistribution,
   useReviewsSummary, useCommitTrend, useOverview,
 } from "@/hooks/useAnalytics";
+import { useRepos } from "@/hooks/useRepos";
 import { DateRangePicker, usePresetDates, useDatePreset } from "@/components/shared/DateRangePicker";
 import { TrendingUp, GitPullRequest, Star, Code2 } from "lucide-react";
 import { StatCard } from "./_components/StatCard";
@@ -12,8 +13,9 @@ import { CommitTrendChart } from "./_components/CommitTrendChart";
 import { ContributionHeatmapSection } from "./_components/ContributionHeatmapSection";
 import { PRLifecycleSection } from "./_components/PRLifecycleSection";
 import { ReviewsSection } from "./_components/ReviewsSection";
+import { LanguageDistribution } from "./_components/LanguageDistribution";
 
-const tabs = ["Commits", "Pull Requests", "Reviews"] as const;
+const tabs = ["Commits", "Pull Requests", "Reviews", "Languages"] as const;
 type Tab = (typeof tabs)[number];
 
 export default function AnalyticsPage() {
@@ -22,6 +24,7 @@ export default function AnalyticsPage() {
   const [granularity, setGranularity] = useState<"daily" | "weekly">("daily");
   const { from, to } = usePresetDates(preset);
 
+  const { data: repos } = useRepos();
   const { data: heatmap, isLoading: heatmapLoading } = useHeatmap(undefined, undefined, from, to);
   const { data: trend, isLoading: trendLoading } = useCommitTrend(from, to, granularity);
   const { data: overview, isLoading: overviewLoading } = useOverview(from, to);
@@ -94,6 +97,16 @@ export default function AnalyticsPage() {
 
       {tab === "Reviews" && (
         <ReviewsSection reviews={reviews} isLoading={reviewsLoading} />
+      )}
+
+      {tab === "Languages" && (
+        <div className="bg-card border border-border rounded-xl p-6">
+          <h2 className="font-semibold mb-1">Language Distribution</h2>
+          <p className="text-xs text-muted-foreground mb-5">
+            Primary language of each tracked repository.
+          </p>
+          <LanguageDistribution repos={repos ?? []} />
+        </div>
       )}
     </div>
   );

@@ -14,6 +14,10 @@ import {
   getOverview,
   getRepoHealth,
   getAiSummary,
+  getActivityFeed,
+  getCollaboration,
+  getPublicRepoStats,
+  getRepoCommitTrend,
 } from "@/lib/api/client";
 
 // Analytics data changes infrequently — 5 min staleTime prevents refetch on every window focus
@@ -35,11 +39,12 @@ export function useHeatmap(repoId?: string, timezone?: string, from?: string, to
   });
 }
 
-export function usePRLifecycle(from: string, to: string) {
+export function usePRLifecycle(from: string, to: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ["pr-lifecycle", from, to],
     queryFn: () => getPRLifecycle(from, to),
     staleTime: ANALYTICS_STALE_MS,
+    ...options,
   });
 }
 
@@ -102,19 +107,47 @@ export function useInsights(timezone?: string, from?: string, to?: string) {
   });
 }
 
-export function useCommitTrend(from: string, to: string, granularity = "daily") {
+export function useCommitTrend(from: string, to: string, granularity = "daily", options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ["commit-trend", from, to, granularity],
     queryFn: () => getCommitTrend(from, to, granularity),
     staleTime: ANALYTICS_STALE_MS,
+    ...options,
   });
 }
 
-export function useOverview(from: string, to: string) {
+export function useCollaboration(from: string, to: string) {
+  return useQuery({
+    queryKey: ["collaboration", from, to],
+    queryFn: () => getCollaboration(from, to),
+    staleTime: ANALYTICS_STALE_MS,
+  });
+}
+
+export function usePublicRepoStats(repoId: string) {
+  return useQuery({
+    queryKey: ["public-repo-stats", repoId],
+    queryFn: () => getPublicRepoStats(repoId),
+    enabled: !!repoId,
+    staleTime: ANALYTICS_STALE_MS,
+  });
+}
+
+export function useRepoCommitTrend(repoId: string, from: string, to: string) {
+  return useQuery({
+    queryKey: ["repo-commit-trend", repoId, from, to],
+    queryFn: () => getRepoCommitTrend(repoId, from, to),
+    enabled: !!repoId,
+    staleTime: ANALYTICS_STALE_MS,
+  });
+}
+
+export function useOverview(from: string, to: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ["overview", from, to],
     queryFn: () => getOverview(from, to),
     staleTime: ANALYTICS_STALE_MS,
+    ...options,
   });
 }
 
@@ -132,5 +165,13 @@ export function useAiSummary(timezone?: string, from?: string, to?: string) {
     queryKey: ["ai-summary", timezone, from, to],
     queryFn: () => getAiSummary(timezone, from, to),
     staleTime: 6 * 60 * 60 * 1000, // 6 hours — AI summaries are expensive, cache aggressively
+  });
+}
+
+export function useActivityFeed(limit = 40) {
+  return useQuery({
+    queryKey: ["activity-feed", limit],
+    queryFn: () => getActivityFeed(limit),
+    staleTime: ANALYTICS_STALE_MS,
   });
 }

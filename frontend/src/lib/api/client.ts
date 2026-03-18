@@ -45,6 +45,9 @@ import type {
   Overview,
   RepoHealth,
   AiSummary,
+  ActivityEvent,
+  CollaborationData,
+  PublicRepoStats,
 } from "@/types";
 import type { ApiResponse } from "@/types";
 
@@ -173,3 +176,31 @@ export const sendDigestPreview = () =>
 
 export const deleteAccount = () =>
   apiClient.delete<ApiResponse<void>>("/auth/account").then(unwrap);
+
+// Activity Feed
+export const getActivityFeed = (limit = 40) =>
+  apiClient
+    .get<ApiResponse<ActivityEvent[]>>("/analytics/activity", { params: { limit } })
+    .then(unwrap);
+
+// Review Queue
+export const getReviewQueue = () =>
+  apiClient.get<ApiResponse<import("@/types").ReviewQueueItem[]>>("/analytics/review-queue").then(unwrap);
+
+// Collaboration
+export const getCollaboration = (from: string, to: string) =>
+  apiClient
+    .get<ApiResponse<CollaborationData>>("/analytics/collaboration", { params: { from, to } })
+    .then(unwrap);
+
+// Public Repo Stats
+export const getPublicRepoStats = (repoId: string) =>
+  apiClient
+    .get<ApiResponse<PublicRepoStats>>(`/analytics/repos/${repoId}/stats`)
+    .then(unwrap);
+
+// Repo Commit Trend
+export const getRepoCommitTrend = (repoId: string, from: string, to: string) =>
+  apiClient
+    .get<ApiResponse<CommitTrendPoint[]>>(`/analytics/repos/${repoId}/commit-trend`, { params: { from, to } })
+    .then(unwrap);

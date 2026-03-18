@@ -13,6 +13,11 @@ import {
   Sun,
   Moon,
   Compass,
+  Trophy,
+  Target,
+  Activity,
+  GitPullRequestArrow,
+  GitCompareArrows,
 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
@@ -26,8 +31,13 @@ const navItems = [
   { href: "/repos", icon: GitBranch, label: "Repositories" },
   { href: "/analytics", icon: BarChart2, label: "Analytics" },
   { href: "/team", icon: Users, label: "Team" },
-  { href: "/settings", icon: Settings, label: "Settings" },
+  { href: "/review-queue", icon: GitPullRequestArrow, label: "Review Queue" },
+  { href: "/compare", icon: GitCompareArrows, label: "Compare" },
+  { href: "/feed", icon: Activity, label: "Activity Feed" },
+  { href: "/achievements", icon: Trophy, label: "Achievements" },
+  { href: "/goals", icon: Target, label: "Goals" },
   { href: "/explore", icon: Compass, label: "Explore" },
+  { href: "/settings", icon: Settings, label: "Settings" },
 ];
 
 export function Sidebar() {
@@ -72,7 +82,7 @@ export function Sidebar() {
       )}
 
       {/* Nav */}
-      <nav className="flex-1 p-4 space-y-1">
+      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
         {navItems.map(({ href, icon: Icon, label }) => (
           <Link
             key={href}

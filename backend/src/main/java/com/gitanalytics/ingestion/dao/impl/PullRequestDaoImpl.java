@@ -39,6 +39,16 @@ public class PullRequestDaoImpl implements PullRequestDao {
     }
 
     @Override
+    public List<PullRequest> findRecentByUser(UUID userId, String login, int limit) {
+        return pullRequestRepository.findRecentByUser(userId, login, limit);
+    }
+
+    @Override
+    public List<PullRequest> findReviewQueue(UUID userId, String login) {
+        return pullRequestRepository.findReviewQueue(userId, login);
+    }
+
+    @Override
     public PullRequest save(PullRequest pullRequest) {
         return pullRequestRepository.save(pullRequest);
     }

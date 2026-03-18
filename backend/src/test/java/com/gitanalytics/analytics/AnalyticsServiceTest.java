@@ -5,6 +5,7 @@ import com.gitanalytics.analytics.dto.*;
 import com.gitanalytics.analytics.service.AnalyticsService;
 import com.gitanalytics.auth.dao.UserDao;
 import com.gitanalytics.auth.entity.User;
+import com.gitanalytics.ingestion.dao.CommitDao;
 import com.gitanalytics.ingestion.dao.PullRequestDao;
 import com.gitanalytics.ingestion.dao.ReleaseDao;
 import com.gitanalytics.ingestion.dao.TrackedRepoDao;
@@ -33,6 +34,7 @@ class AnalyticsServiceTest {
 
     @Mock private AnalyticsDao analyticsDao;
     @Mock private UserDao userDao;
+    @Mock private CommitDao commitDao;
     @Mock private PullRequestDao pullRequestDao;
     @Mock private ReleaseDao releaseDao;
     @Mock private TrackedRepoDao trackedRepoDao;
@@ -45,7 +47,7 @@ class AnalyticsServiceTest {
     @BeforeEach
     void setUp() {
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
-        service = new AnalyticsService(analyticsDao, userDao, pullRequestDao, releaseDao, trackedRepoDao, redisTemplate, groqApiClient);
+        service = new AnalyticsService(analyticsDao, userDao, commitDao, pullRequestDao, releaseDao, trackedRepoDao, redisTemplate, groqApiClient);
     }
 
     // ---------- PR Size Distribution ----------

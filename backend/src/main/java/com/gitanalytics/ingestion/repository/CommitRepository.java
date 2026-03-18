@@ -29,6 +29,10 @@ public interface CommitRepository extends JpaRepository<Commit, Long> {
            "AND c.committedAt > :since")
     long countByRepoSince(UUID repoId, OffsetDateTime since);
 
+    @Query("SELECT c FROM Commit c WHERE c.repo.user.id = :userId AND c.authorLogin = :login " +
+           "ORDER BY c.committedAt DESC LIMIT :limit")
+    List<Commit> findRecentByUser(UUID userId, String login, int limit);
+
     @Transactional
     @Query(value = "INSERT INTO commits (repo_id, sha, author_login, author_github_id, " +
                    "message_summary, additions, deletions, committed_at) " +

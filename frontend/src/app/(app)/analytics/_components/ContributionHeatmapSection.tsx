@@ -18,7 +18,7 @@ export function ContributionHeatmapSection({ data, isLoading }: Props) {
       {isLoading ? (
         <Skeleton className="h-40" />
       ) : (data ?? []).length === 0 ? (
-        <div className="h-40 flex items-center justify-center text-muted-foreground text-sm">
+        <div className="h-52 flex items-center justify-center text-muted-foreground text-sm">
           No commits yet — sync a repository to see your coding patterns
         </div>
       ) : (

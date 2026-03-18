@@ -139,3 +139,58 @@ export interface AiSummary {
   summary: string;
   aiPowered: boolean;
 }
+
+export interface ReviewQueueItem {
+  id: number;
+  prNumber: number;
+  title: string;
+  repoFullName: string;
+  authorLogin: string;
+  createdAt: string;
+  additions: number;
+  deletions: number;
+  changedFiles: number;
+  ageHours: number;
+  sizeLabel: "XS" | "S" | "M" | "L" | "XL";
+}
+
+export interface CollaboratorEntry {
+  login: string;
+  count: number;
+}
+
+export interface CollaborationData {
+  topReviewersOfMe: CollaboratorEntry[];
+  topPeopleIReview: CollaboratorEntry[];
+}
+
+export interface PublicRepoStats {
+  fullName: string;
+  description: string | null;
+  stars: number;
+  forks: number;
+  openIssues: number;
+  primaryLanguage: string | null;
+  languages: Record<string, number>;
+  repoHealth: number;
+  repoHealthLabel: string;
+  totalCommits: number;
+  totalPRs: number;
+  mergedPRs: number;
+  avgMergeTimeHours: number;
+  topContributor: string | null;
+  topContributorPct: number;
+  isPublic: boolean;
+}
+
+export interface ActivityEvent {
+  type: "COMMIT" | "PR_OPENED" | "PR_MERGED" | "PR_CLOSED";
+  title: string;
+  repoFullName: string;
+  sha: string | null;
+  prNumber: number | null;
+  state: string | null;
+  linesAdded: number | null;
+  linesRemoved: number | null;
+  occurredAt: string;
+}

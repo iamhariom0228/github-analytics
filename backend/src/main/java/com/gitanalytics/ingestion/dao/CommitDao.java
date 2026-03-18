@@ -11,5 +11,6 @@ public interface CommitDao {
     long countByRepoId(UUID repoId);
     long countByRepoSince(UUID repoId, OffsetDateTime since);
     List<Commit> findByUserAndAuthorAndDateRange(UUID userId, String login, OffsetDateTime from, OffsetDateTime to);
+    List<Commit> findRecentByUser(UUID userId, String login, int limit);
     void deleteByRepoId(UUID repoId);
 }

@@ -65,4 +65,11 @@ public interface AnalyticsDao {
 
     // AI summary helper
     long countOpenStalePRsOlderThan(UUID userId, String intervalDays);
+
+    // Collaboration
+    List<Object[]> getTopReviewersOfMyPRs(UUID userId, String login, OffsetDateTime from, OffsetDateTime to);
+    List<Object[]> getTopPeopleIReview(UUID userId, String login, OffsetDateTime from, OffsetDateTime to);
+
+    // Repo commit trend
+    List<CommitTrendDto> getCommitTrendByRepo(UUID repoId, OffsetDateTime from, OffsetDateTime to);
 }

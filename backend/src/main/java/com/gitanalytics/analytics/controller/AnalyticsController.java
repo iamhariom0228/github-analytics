@@ -163,4 +163,40 @@ public class AnalyticsController {
             .orElseThrow(() -> new ResourceNotFoundException("User not found")).getUsername();
         return ResponseEntity.ok(ApiResponse.ok(analyticsService.getInsights(userId, login, timezone, from, to)));
     }
+
+    @GetMapping("/activity")
+    public ResponseEntity<ApiResponse<List<ActivityEvent>>> getActivityFeed(
+            @AuthenticationPrincipal UserDetails principal,
+            @RequestParam(defaultValue = "30") int limit) {
+        UUID userId = UUID.fromString(principal.getUsername());
+        return ResponseEntity.ok(ApiResponse.ok(analyticsService.getActivityFeed(userId, limit)));
+    }
+
+    @GetMapping("/review-queue")
+    public ResponseEntity<ApiResponse<List<ReviewQueueItem>>> getReviewQueue(
+            @AuthenticationPrincipal UserDetails principal) {
+        UUID userId = UUID.fromString(principal.getUsername());
+        return ResponseEntity.ok(ApiResponse.ok(analyticsService.getReviewQueue(userId)));
+    }
+
+    @GetMapping("/collaboration")
+    public ResponseEntity<ApiResponse<CollaborationDto>> getCollaboration(
+            @AuthenticationPrincipal UserDetails principal,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to) {
+        UUID userId = UUID.fromString(principal.getUsername());
+        String login = userRepository.findById(userId)
+            .orElseThrow(() -> new ResourceNotFoundException("User not found")).getUsername();
+        return ResponseEntity.ok(ApiResponse.ok(analyticsService.getCollaboration(userId, login, from, to)));
+    }
+
+    @GetMapping("/repos/{repoId}/commit-trend")
+    public ResponseEntity<ApiResponse<List<CommitTrendDto>>> getRepoCommitTrend(
+            @AuthenticationPrincipal UserDetails principal,
+            @PathVariable UUID repoId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to) {
+        UUID userId = UUID.fromString(principal.getUsername());
+        return ResponseEntity.ok(ApiResponse.ok(analyticsService.getCommitTrendByRepo(userId, repoId, from, to)));
+    }
 }
