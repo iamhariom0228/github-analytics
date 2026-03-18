@@ -3,16 +3,15 @@ package com.gitanalytics.auth.controller;
 import com.gitanalytics.auth.entity.User;
 import com.gitanalytics.auth.repository.UserRepository;
 import com.gitanalytics.shared.security.JwtService;
-import jakarta.servlet.http.Cookie;
-import jakarta.servlet.http.HttpServletResponse;
+import com.gitanalytics.shared.util.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.io.IOException;
+import java.util.Map;
 
 @Slf4j
 @RestController
@@ -23,23 +22,22 @@ public class DevLoginController {
     private final UserRepository userRepository;
     private final JwtService jwtService;
 
-    @Value("${app.frontend-url:http://localhost:3000}")
-    private String frontendUrl;
-
-    @GetMapping("/demo-login")
-    public void demoLogin(HttpServletResponse response) throws IOException {
+    /**
+     * Returns the demo user's JWT as JSON.
+     * Called server-side by the Next.js /api/demo-login route, which sets
+     * the cookie and redirects the browser — avoids proxy redirect issues.
+     */
+    @GetMapping("/demo-token")
+    public ResponseEntity<ApiResponse<Map<String, String>>> demoToken() {
         User demo = userRepository.findByGithubId(999_999L)
                 .orElseThrow(() -> new IllegalStateException("Demo user not found"));
 
         String token = jwtService.generateToken(demo.getId(), demo.getUsername());
-
-        Cookie cookie = new Cookie("jwt", token);
-        cookie.setHttpOnly(true);
-        cookie.setPath("/");
-        cookie.setMaxAge(7 * 24 * 60 * 60);
-        response.addCookie(cookie);
-
-        log.info("Demo login issued for user '{}'", demo.getUsername());
-        response.sendRedirect(frontendUrl + "/dashboard");
+        log.info("Demo token issued for user '{}'", demo.getUsername());
+        return ResponseEntity.ok(ApiResponse.ok(Map.of(
+                "token", token,
+                "userId", demo.getId().toString(),
+                "username", demo.getUsername()
+        )));
     }
 }
