@@ -128,10 +128,12 @@ function CompareCard({ label, aValue, bValue, pct, aLabel, bLabel, isLoading, in
 function MiniTrendChart({
   data,
   color,
+  gradientId,
   isLoading,
 }: {
   data: { date: string; commits: number }[];
   color: string;
+  gradientId: string;
   isLoading: boolean;
 }) {
   if (isLoading) return <Skeleton className="h-28" />;
@@ -140,7 +142,7 @@ function MiniTrendChart({
     <ResponsiveContainer width="100%" height={112}>
       <AreaChart data={data} margin={{ top: 4, right: 4, left: -30, bottom: 0 }}>
         <defs>
-          <linearGradient id={`grad-${color}`} x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
             <stop offset="5%" stopColor={color} stopOpacity={0.25} />
             <stop offset="95%" stopColor={color} stopOpacity={0} />
           </linearGradient>
@@ -152,7 +154,7 @@ function MiniTrendChart({
           contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "11px" }}
           formatter={(v: number) => [v, "commits"]}
         />
-        <Area type="monotone" dataKey="commits" stroke={color} strokeWidth={2} fill={`url(#grad-${color})`} dot={false} />
+        <Area type="monotone" dataKey="commits" stroke={color} strokeWidth={2} fill={`url(#${gradientId})`} dot={false} />
       </AreaChart>
     </ResponsiveContainer>
   );
@@ -430,6 +432,7 @@ export default function ComparePage() {
             <MiniTrendChart
               data={toChartData(trendA)}
               color="hsl(var(--primary))"
+              gradientId="compare-grad-a"
               isLoading={trendLoadA}
             />
           </div>
@@ -440,6 +443,7 @@ export default function ComparePage() {
             <MiniTrendChart
               data={toChartData(trendB)}
               color="hsl(var(--muted-foreground))"
+              gradientId="compare-grad-b"
               isLoading={trendLoadB}
             />
           </div>
