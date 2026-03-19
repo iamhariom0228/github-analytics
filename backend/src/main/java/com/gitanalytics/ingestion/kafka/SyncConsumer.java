@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.event.TransactionPhase;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.HashSet;
 import java.util.List;
@@ -236,6 +237,10 @@ public class SyncConsumer {
             repo.setLanguage(meta.getLanguage());
             repo.setDescription(meta.getDescription());
             trackedRepoDao.save(repo);
+            // Capture a snapshot immediately so trend data is available right after sync
+            repoStatsSnapshotRepository.upsert(
+                repo.getId(), LocalDate.now(),
+                repo.getStars(), repo.getForks(), repo.getWatchers());
         }
     }
 

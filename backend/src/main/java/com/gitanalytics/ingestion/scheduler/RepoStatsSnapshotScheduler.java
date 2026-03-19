@@ -5,6 +5,8 @@ import com.gitanalytics.ingestion.repository.RepoStatsSnapshotRepository;
 import com.gitanalytics.ingestion.repository.TrackedRepoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -18,6 +20,11 @@ public class RepoStatsSnapshotScheduler {
 
     private final TrackedRepoRepository trackedRepoRepository;
     private final RepoStatsSnapshotRepository snapshotRepository;
+
+    @EventListener(ApplicationReadyEvent.class)
+    public void takeSnapshotsOnStartup() {
+        takeSnapshots();
+    }
 
     @Scheduled(cron = "0 0 1 * * *", zone = "UTC")
     public void takeSnapshots() {
