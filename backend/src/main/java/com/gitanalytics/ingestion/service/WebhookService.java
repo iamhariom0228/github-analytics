@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.HexFormat;
 
 @Slf4j
@@ -38,8 +39,7 @@ public class WebhookService {
 
             long githubRepoId = repoNode.get("id").asLong();
             // Find the tracked repo across all users
-            trackedRepoDao.findAll().stream()
-                .filter(r -> r.getGithubRepoId() == githubRepoId)
+            trackedRepoDao.findByGithubRepoId(githubRepoId)
                 .forEach(repo -> publishWebhookEvent(repo, event, deliveryId, payload));
 
         } catch (Exception e) {
@@ -65,7 +65,7 @@ public class WebhookService {
             mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
             byte[] digest = mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
             String expected = "sha256=" + HexFormat.of().formatHex(digest);
-            if (!expected.equals(signature)) {
+            if (!MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8), signature.getBytes(StandardCharsets.UTF_8))) {
                 throw new UnauthorizedException("Invalid webhook signature");
             }
         } catch (UnauthorizedException e) {

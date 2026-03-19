@@ -12,6 +12,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 import java.net.URI;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.UUID;
 
@@ -45,12 +48,14 @@ public class AuthController {
         User user = gitHubOAuthService.handleCallback(code, state);
         String token = jwtService.generateToken(user.getId(), user.getUsername());
 
-        Cookie cookie = new Cookie("jwt", token);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(!"false".equalsIgnoreCase(System.getenv("COOKIE_SECURE"))); // defaults to true
-        cookie.setPath("/");
-        cookie.setMaxAge(7 * 24 * 60 * 60); // 7 days
-        response.addCookie(cookie);
+        ResponseCookie cookie = ResponseCookie.from("jwt", token)
+            .httpOnly(true)
+            .secure(!"false".equalsIgnoreCase(System.getenv("COOKIE_SECURE")))
+            .path("/")
+            .sameSite("Lax")
+            .maxAge(Duration.ofDays(7))
+            .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
 
         // Redirect to frontend dashboard
         response.sendRedirect(System.getenv().getOrDefault("FRONTEND_URL", "http://localhost:3000") + "/dashboard");
@@ -69,12 +74,14 @@ public class AuthController {
         }
 
         // Clear cookie
-        Cookie cookie = new Cookie("jwt", "");
-        cookie.setHttpOnly(true);
-        cookie.setSecure(!"false".equalsIgnoreCase(System.getenv("COOKIE_SECURE"))); // defaults to true
-        cookie.setPath("/");
-        cookie.setMaxAge(0);
-        response.addCookie(cookie);
+        ResponseCookie cookie = ResponseCookie.from("jwt", "")
+            .httpOnly(true)
+            .secure(!"false".equalsIgnoreCase(System.getenv("COOKIE_SECURE")))
+            .path("/")
+            .sameSite("Lax")
+            .maxAge(Duration.ZERO)
+            .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
 
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
@@ -86,11 +93,14 @@ public class AuthController {
         UUID userId = UUID.fromString(principal.getUsername());
         userRepository.deleteById(userId);
         // Clear JWT cookie
-        Cookie cookie = new Cookie("jwt", "");
-        cookie.setMaxAge(0);
-        cookie.setPath("/");
-        cookie.setHttpOnly(true);
-        response.addCookie(cookie);
+        ResponseCookie cookie = ResponseCookie.from("jwt", "")
+            .httpOnly(true)
+            .secure(!"false".equalsIgnoreCase(System.getenv("COOKIE_SECURE")))
+            .path("/")
+            .sameSite("Lax")
+            .maxAge(Duration.ZERO)
+            .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 

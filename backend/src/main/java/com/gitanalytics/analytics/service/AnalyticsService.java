@@ -35,6 +35,16 @@ public class AnalyticsService {
     private final RedisTemplate<String, Object> redisTemplate;
     private final GroqApiClient groqApiClient;
 
+    // ── Timezone Helper ───────────────────────────────────────────────────────
+
+    private ZoneId parseTimezone(String timezone) {
+        try {
+            return ZoneId.of(timezone);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid timezone: " + timezone);
+        }
+    }
+
     // ── Dashboard ─────────────────────────────────────────────────────────────
 
     public DashboardSummaryDto getDashboard(UUID userId) {
@@ -80,10 +90,20 @@ public class AnalyticsService {
 
     public List<HeatmapCellDto> getCommitHeatmap(UUID userId, String repoId, String timezone,
                                                    OffsetDateTime from, OffsetDateTime to) {
+        String tz = timezone != null ? timezone : "UTC";
+        parseTimezone(tz); // validate early
+        UUID repoUuid = null;
+        if (repoId != null) {
+            try {
+                repoUuid = UUID.fromString(repoId);
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Invalid repoId: " + repoId);
+            }
+        }
         return analyticsDao.getCommitHeatmap(
             userId,
-            timezone != null ? timezone : "UTC",
-            repoId != null ? UUID.fromString(repoId) : null,
+            tz,
+            repoUuid,
             from, to);
     }
 
@@ -153,13 +173,13 @@ public class AnalyticsService {
             Object[] row = analyticsDao.getStreakData(userId, login, timezone);
             int longest = row[0] != null ? ((Number) row[0]).intValue() : 0;
             int current = 0;
-            if (row[1] != null && row[2] != null) {
+            if (row.length > 2 && row[1] != null && row[2] != null) {
                 LocalDate lastDay = switch (row[2]) {
                     case java.sql.Date d -> d.toLocalDate();
                     case LocalDate d -> d;
                     default -> LocalDate.parse(row[2].toString().substring(0, 10));
                 };
-                LocalDate today = LocalDate.now(ZoneId.of(timezone));
+                LocalDate today = LocalDate.now(parseTimezone(timezone));
                 if (!lastDay.isBefore(today.minusDays(1))) {
                     current = ((Number) row[1]).intValue();
                 }
@@ -179,6 +199,7 @@ public class AnalyticsService {
                                         OffsetDateTime from, OffsetDateTime to) {
         List<InsightDto> insights = new ArrayList<>();
         String tz = timezone != null ? timezone : "UTC";
+        parseTimezone(tz); // validate early
 
         OffsetDateTime effectiveTo = to != null ? to : OffsetDateTime.now();
         OffsetDateTime effectiveFrom = from != null ? from : effectiveTo.minusDays(30);

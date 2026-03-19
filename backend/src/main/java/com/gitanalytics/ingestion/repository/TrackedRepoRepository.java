@@ -11,6 +11,7 @@ import java.util.UUID;
 @Repository
 public interface TrackedRepoRepository extends JpaRepository<TrackedRepo, UUID> {
     List<TrackedRepo> findByUserId(UUID userId);
+    List<TrackedRepo> findByGithubRepoId(long githubRepoId);
     Optional<TrackedRepo> findByUserIdAndGithubRepoId(UUID userId, Long githubRepoId);
     boolean existsByUserIdAndGithubRepoId(UUID userId, Long githubRepoId);
     List<TrackedRepo> findByUserIdAndSyncStatus(UUID userId, TrackedRepo.SyncStatus syncStatus);

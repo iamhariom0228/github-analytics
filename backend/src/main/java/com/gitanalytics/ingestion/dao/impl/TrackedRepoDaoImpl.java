@@ -27,6 +27,11 @@ public class TrackedRepoDaoImpl implements TrackedRepoDao {
     }
 
     @Override
+    public List<TrackedRepo> findByGithubRepoId(long githubRepoId) {
+        return trackedRepoRepository.findByGithubRepoId(githubRepoId);
+    }
+
+    @Override
     public List<TrackedRepo> findByUserId(UUID userId) {
         return trackedRepoRepository.findByUserId(userId);
     }

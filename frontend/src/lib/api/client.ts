@@ -16,6 +16,11 @@ apiClient.interceptors.response.use(
       if (typeof window !== "undefined") {
         window.location.href = "/";
       }
+    } else if (error.response?.status === 403) {
+      // Redirect to login on 403 (forbidden / insufficient permissions)
+      if (typeof window !== "undefined") {
+        window.location.href = "/";
+      }
     }
     return Promise.reject(error);
   }

@@ -9,6 +9,7 @@ import java.util.UUID;
 public interface TrackedRepoDao {
     Optional<TrackedRepo> findById(UUID id);
     List<TrackedRepo> findAll();
+    List<TrackedRepo> findByGithubRepoId(long githubRepoId);
     List<TrackedRepo> findByUserId(UUID userId);
     List<TrackedRepo> findByUserIdAndSyncStatus(UUID userId, TrackedRepo.SyncStatus status);
     boolean existsByUserIdAndGithubRepoId(UUID userId, Long githubRepoId);

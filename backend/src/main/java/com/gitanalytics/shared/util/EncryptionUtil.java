@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Base64;
 
@@ -58,9 +59,10 @@ public class EncryptionUtil {
     }
 
     private byte[] getKey() {
-        byte[] keyBytes = appProperties.getEncryption().getKey().getBytes();
-        byte[] key = new byte[32];
-        System.arraycopy(keyBytes, 0, key, 0, Math.min(keyBytes.length, 32));
-        return key;
+        byte[] keyBytes = appProperties.getEncryption().getKey().getBytes(StandardCharsets.UTF_8);
+        if (keyBytes.length != 32) {
+            throw new IllegalStateException("ENCRYPTION_KEY must be exactly 32 bytes (characters) for AES-256. Got: " + keyBytes.length);
+        }
+        return keyBytes;
     }
 }

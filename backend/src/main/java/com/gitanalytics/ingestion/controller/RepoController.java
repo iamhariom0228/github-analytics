@@ -71,7 +71,12 @@ public class RepoController {
             @AuthenticationPrincipal UserDetails principal,
             @RequestBody Map<String, String> request) {
         UUID userId = UUID.fromString(principal.getUsername());
-        String htmlUrl = repoService.forkRepo(userId, request.get("owner"), request.get("repo"));
+        String owner = request.get("owner");
+        String repo = request.get("repo");
+        if (owner == null || owner.isBlank() || repo == null || repo.isBlank()) {
+            throw new IllegalArgumentException("owner and repo are required");
+        }
+        String htmlUrl = repoService.forkRepo(userId, owner, repo);
         return ResponseEntity.ok(ApiResponse.ok(Map.of("htmlUrl", htmlUrl)));
     }
 
