@@ -4,10 +4,10 @@ import com.gitanalytics.ingestion.dao.SyncJobDao;
 import com.gitanalytics.ingestion.dao.TrackedRepoDao;
 import com.gitanalytics.ingestion.entity.SyncJob;
 import com.gitanalytics.ingestion.entity.TrackedRepo;
-import com.gitanalytics.ingestion.kafka.SyncProducer;
 import com.gitanalytics.shared.kafka.events.SyncRequestedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,7 +21,7 @@ public class IncrementalSyncScheduler {
 
     private final TrackedRepoDao trackedRepoDao;
     private final SyncJobDao syncJobDao;
-    private final SyncProducer syncProducer;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Scheduled(cron = "0 0 */6 * * *")
     @Transactional
@@ -41,7 +41,7 @@ public class IncrementalSyncScheduler {
                     .jobType(SyncJob.JobType.INCREMENTAL_SYNC)
                     .status(SyncJob.JobStatus.PENDING)
                     .build());
-                syncProducer.publishSyncRequested(new SyncRequestedEvent(
+                eventPublisher.publishEvent(new SyncRequestedEvent(
                     job.getId(), repo.getUser().getId(), repo.getId(), "INCREMENTAL_SYNC"));
                 log.debug("Triggered incremental sync for repo {}", repo.getFullName());
             } catch (Exception e) {

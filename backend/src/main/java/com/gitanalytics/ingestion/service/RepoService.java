@@ -11,7 +11,6 @@ import com.gitanalytics.ingestion.dto.RepoDto;
 import com.gitanalytics.ingestion.dto.SyncStatusDto;
 import com.gitanalytics.ingestion.entity.SyncJob;
 import com.gitanalytics.ingestion.entity.TrackedRepo;
-import com.gitanalytics.ingestion.kafka.SyncProducer;
 import com.gitanalytics.shared.config.AppProperties;
 import com.gitanalytics.shared.exception.ResourceNotFoundException;
 import com.gitanalytics.shared.exception.UnauthorizedException;
@@ -19,11 +18,10 @@ import com.gitanalytics.shared.kafka.events.SyncRequestedEvent;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.List;
 import java.util.Set;
@@ -40,7 +38,7 @@ public class RepoService {
     private final UserDao userDao;
     private final GitHubApiClient gitHubApiClient;
     private final GitHubOAuthService gitHubOAuthService;
-    private final SyncProducer syncProducer;
+    private final ApplicationEventPublisher eventPublisher;
     private final RedisTemplate<String, Object> redisTemplate;
     private final AppProperties appProperties;
 
@@ -181,17 +179,7 @@ public class RepoService {
             .build());
 
         SyncRequestedEvent event = new SyncRequestedEvent(job.getId(), user.getId(), repo.getId(), syncType);
-
-        if (TransactionSynchronizationManager.isActualTransactionActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    syncProducer.publishSyncRequested(event);
-                }
-            });
-        } else {
-            syncProducer.publishSyncRequested(event);
-        }
+        eventPublisher.publishEvent(event);
 
         return job;
     }

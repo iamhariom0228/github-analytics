@@ -10,11 +10,8 @@ import com.gitanalytics.digest.entity.DigestLog;
 import com.gitanalytics.digest.repository.DigestLogRepository;
 import com.gitanalytics.notification.service.EmailService;
 import com.gitanalytics.shared.exception.ResourceNotFoundException;
-import com.gitanalytics.shared.kafka.events.DigestTriggerEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,7 +30,6 @@ public class DigestService {
     private final DigestLogRepository digestLogRepository;
     private final AnalyticsService analyticsService;
     private final EmailService emailService;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
 
     // Run every hour — find users whose digest time matches now
     @Scheduled(cron = "0 0 * * * *")
@@ -48,9 +44,7 @@ public class DigestService {
                         && now.getHour() == pref.getDigestHour()) {
                     LocalDate weekStart = now.toLocalDate().minusDays(7);
                     if (!digestLogRepository.existsByUserIdAndWeekStart(pref.getUser().getId(), weekStart)) {
-                        kafkaTemplate.send("ga.digest.trigger",
-                            pref.getUser().getId().toString(),
-                            new DigestTriggerEvent(pref.getUser().getId(), weekStart));
+                        sendDigest(pref.getUser().getId(), weekStart, false);
                     }
                 }
             } catch (Exception e) {
@@ -59,18 +53,13 @@ public class DigestService {
         }
     }
 
-    @KafkaListener(topics = "ga.digest.trigger", groupId = "github-analytics")
-    @Transactional
-    public void handleDigestTrigger(DigestTriggerEvent event) {
-        sendDigest(event.getUserId(), event.getWeekStart(), false);
-    }
-
     @Transactional
     public void sendPreviewDigest(UUID userId) {
         LocalDate weekStart = LocalDate.now().minusDays(7);
         sendDigest(userId, weekStart, true);
     }
 
+    @Transactional
     private void sendDigest(UUID userId, LocalDate weekStart, boolean preview) {
         User user = userDao.findById(userId)
             .orElseThrow(() -> new ResourceNotFoundException("User not found"));

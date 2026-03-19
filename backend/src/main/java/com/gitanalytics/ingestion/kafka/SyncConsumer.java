@@ -9,13 +9,14 @@ import com.gitanalytics.ingestion.entity.*;
 import com.gitanalytics.ingestion.repository.RepoLanguageRepository;
 import com.gitanalytics.ingestion.repository.RepoStatsSnapshotRepository;
 import com.gitanalytics.shared.exception.GitHubApiException;
-import com.gitanalytics.shared.kafka.events.SyncCompletedEvent;
 import com.gitanalytics.shared.kafka.events.SyncRequestedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionalEventListener;
+import org.springframework.transaction.event.TransactionPhase;
 
 import java.time.OffsetDateTime;
 import java.util.HashSet;
@@ -39,12 +40,12 @@ public class SyncConsumer {
     private final UserDao userDao;
     private final GitHubApiClient gitHubApiClient;
     private final GitHubOAuthService gitHubOAuthService;
-    private final SyncProducer syncProducer;
     private final RedisTemplate<String, Object> redisTemplate;
     private final RepoLanguageRepository repoLanguageRepository;
     private final RepoStatsSnapshotRepository repoStatsSnapshotRepository;
 
-    @KafkaListener(topics = "ga.sync.requested", groupId = "github-analytics")
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Async("syncTaskExecutor")
     public void handleSyncRequested(SyncRequestedEvent event) {
         log.info("Processing sync: jobId={}, repoId={}, type={}",
             event.getSyncJobId(), event.getRepoId(), event.getSyncType());
@@ -87,8 +88,12 @@ public class SyncConsumer {
             job.setRecordsProcessed(count.get());
             syncJobDao.save(job);
 
-            syncProducer.publishSyncCompleted(new SyncCompletedEvent(
-                event.getSyncJobId(), event.getUserId(), List.of(event.getRepoId()), count.get()));
+            // Invalidate dashboard cache directly — no need for a separate event
+            try {
+                redisTemplate.delete("ga:dashboard:" + event.getUserId());
+            } catch (Exception cacheEx) {
+                log.warn("Failed to invalidate cache after sync: {}", cacheEx.getMessage());
+            }
 
         } catch (Exception e) {
             log.error("Sync failed for repo {}: {}", event.getRepoId(), e.getMessage(), e);

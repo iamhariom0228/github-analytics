@@ -3,14 +3,13 @@ package com.gitanalytics.ingestion.service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gitanalytics.ingestion.entity.TrackedRepo;
-import com.gitanalytics.ingestion.kafka.SyncProducer;
 import com.gitanalytics.ingestion.dao.TrackedRepoDao;
 import com.gitanalytics.shared.config.AppProperties;
 import com.gitanalytics.shared.exception.UnauthorizedException;
 import com.gitanalytics.shared.kafka.events.WebhookReceivedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.Mac;
@@ -25,7 +24,7 @@ import java.util.HexFormat;
 public class WebhookService {
 
     private final TrackedRepoDao trackedRepoDao;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final ApplicationEventPublisher eventPublisher;
     private final AppProperties appProperties;
     private final ObjectMapper objectMapper;
 
@@ -48,10 +47,8 @@ public class WebhookService {
     }
 
     private void publishWebhookEvent(TrackedRepo repo, String event, String deliveryId, String payload) {
-        kafkaTemplate.send("ga.webhook.received",
-            repo.getId().toString(),
-            new WebhookReceivedEvent(deliveryId, repo.getUser().getId(), repo.getId(), event, payload)
-        );
+        eventPublisher.publishEvent(
+            new WebhookReceivedEvent(deliveryId, repo.getUser().getId(), repo.getId(), event, payload));
     }
 
     private void validateSignature(String payload, String signature) {

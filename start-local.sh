@@ -76,7 +76,7 @@ if ! docker info &>/dev/null 2>&1; then
 fi
 
 # ---------- Start infrastructure ----------
-log "Starting PostgreSQL, Redis, and Kafka via docker-compose..."
+log "Starting PostgreSQL and Redis via docker-compose..."
 docker compose -f "$ROOT/docker-compose.yml" up -d 2>/dev/null || \
   docker-compose -f "$ROOT/docker-compose.yml" up -d
 
@@ -87,16 +87,6 @@ log "PostgreSQL ready."
 log "Waiting for Redis..."
 until docker exec ga-redis redis-cli ping &>/dev/null; do sleep 1; done
 log "Redis ready."
-
-log "Waiting for Kafka (may take ~30s on first start)..."
-for i in $(seq 1 30); do
-  if docker exec ga-kafka /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 &>/dev/null; then
-    log "Kafka ready."
-    break
-  fi
-  sleep 3
-  [ "$i" -eq 30 ] && warn "Kafka health check timed out — continuing anyway (topics auto-create on first use)"
-done
 
 # ---------- Build backend if no JAR exists ----------
 JAR=$(ls "$BACKEND"/target/github-analytics-*.jar 2>/dev/null | head -1)

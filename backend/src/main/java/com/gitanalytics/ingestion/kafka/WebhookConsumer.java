@@ -10,12 +10,14 @@ import com.gitanalytics.ingestion.entity.PullRequest;
 import com.gitanalytics.ingestion.entity.PrReview;
 import com.gitanalytics.ingestion.entity.SyncJob;
 import com.gitanalytics.ingestion.entity.TrackedRepo;
-import com.gitanalytics.shared.kafka.events.SyncCompletedEvent;
 import com.gitanalytics.shared.kafka.events.SyncRequestedEvent;
 import com.gitanalytics.shared.kafka.events.WebhookReceivedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.event.EventListener;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,10 +34,12 @@ public class WebhookConsumer {
     private final PullRequestDao pullRequestDao;
     private final PrReviewDao prReviewDao;
     private final SyncJobDao syncJobDao;
-    private final SyncProducer syncProducer;
+    private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
+    private final RedisTemplate<String, Object> redisTemplate;
 
-    @KafkaListener(topics = "ga.webhook.received", groupId = "github-analytics")
+    @EventListener
+    @Async("syncTaskExecutor")
     @Transactional
     public void handleWebhook(WebhookReceivedEvent event) {
         log.debug("Processing webhook: type={}, repo={}", event.getEventType(), event.getRepoId());
@@ -46,8 +50,11 @@ public class WebhookConsumer {
                 case "pull_request_review" -> processPullRequestReviewEvent(event.getRepoId(), payload);
                 case "push" -> triggerIncrementalSync(event.getRepoId(), event.getUserId());
             }
-            syncProducer.publishSyncCompleted(new SyncCompletedEvent(
-                null, event.getUserId(), List.of(event.getRepoId()), 1));
+            try {
+                redisTemplate.delete("ga:dashboard:" + event.getUserId());
+            } catch (Exception e) {
+                log.warn("Failed to invalidate cache after webhook: {}", e.getMessage());
+            }
         } catch (Exception e) {
             log.error("Failed to process webhook event: {}", e.getMessage(), e);
         }
@@ -62,7 +69,7 @@ public class WebhookConsumer {
                 .jobType(SyncJob.JobType.INCREMENTAL_SYNC)
                 .status(SyncJob.JobStatus.PENDING)
                 .build());
-            syncProducer.publishSyncRequested(new SyncRequestedEvent(
+            eventPublisher.publishEvent(new SyncRequestedEvent(
                 job.getId(), userId, repoId, "INCREMENTAL_SYNC"));
             log.info("Triggered incremental sync for repo {} via webhook push", repo.getFullName());
         } catch (Exception e) {
