@@ -19,6 +19,7 @@ public class AppProperties {
     public static class Jwt {
         private String secret;
         private long expirationMs;
+        private long refreshTokenTtlSeconds;
     }
 
     @Data
@@ -46,7 +47,6 @@ public class AppProperties {
         private long oauthStateTtl;
         private long rateLimitTtl;
         private long syncLockTtl;
-        private long tokenRevokedTtl;
         private long streakCacheTtl;
     }
 }

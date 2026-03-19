@@ -33,9 +33,11 @@ public class DevLoginController {
                 .orElseThrow(() -> new IllegalStateException("Demo user not found"));
 
         String token = jwtService.generateToken(demo.getId(), demo.getUsername());
+        String refreshToken = jwtService.generateRefreshToken(demo.getId());
         log.info("Demo token issued for user '{}'", demo.getUsername());
         return ResponseEntity.ok(ApiResponse.ok(Map.of(
                 "token", token,
+                "refreshToken", refreshToken,
                 "userId", demo.getId().toString(),
                 "username", demo.getUsername()
         )));

@@ -36,11 +36,8 @@ class JwtServiceTest {
         AppProperties.Jwt jwt = new AppProperties.Jwt();
         jwt.setSecret("test-jwt-secret-that-is-long-enough-for-hs256-algorithm-at-least-32");
         jwt.setExpirationMs(3_600_000L);
+        jwt.setRefreshTokenTtlSeconds(2_592_000L);
         props.setJwt(jwt);
-
-        AppProperties.Redis redis = new AppProperties.Redis();
-        redis.setTokenRevokedTtl(3600L);
-        props.setRedis(redis);
 
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
 
@@ -63,15 +60,7 @@ class JwtServiceTest {
     @Test
     void isTokenValid_returnsTrueForFreshToken() {
         String token = jwtService.generateToken(UUID.randomUUID(), "alice");
-        when(redisTemplate.hasKey(anyString())).thenReturn(false);
         assertThat(jwtService.isTokenValid(token)).isTrue();
-    }
-
-    @Test
-    void isTokenValid_returnsFalseForRevokedToken() {
-        String token = jwtService.generateToken(UUID.randomUUID(), "alice");
-        when(redisTemplate.hasKey(anyString())).thenReturn(true);
-        assertThat(jwtService.isTokenValid(token)).isFalse();
     }
 
     @Test
@@ -80,14 +69,36 @@ class JwtServiceTest {
     }
 
     @Test
-    void revokeToken_storesHashInRedis() {
-        String token = jwtService.generateToken(UUID.randomUUID(), "alice");
-        jwtService.revokeToken(token);
+    void generateRefreshToken_storesInRedis() {
+        UUID userId = UUID.randomUUID();
+        String refreshToken = jwtService.generateRefreshToken(userId);
+        assertThat(refreshToken).isNotBlank();
         verify(valueOperations).set(
-            startsWith("ga:token:revoked:"),
-            eq("1"),
-            eq(3600L),
+            startsWith("ga:refresh:"),
+            eq(userId.toString()),
+            eq(2_592_000L),
             eq(TimeUnit.SECONDS)
         );
+    }
+
+    @Test
+    void validateRefreshToken_returnsUserIdWhenPresent() {
+        UUID userId = UUID.randomUUID();
+        String token = "some-opaque-token";
+        when(valueOperations.get("ga:refresh:" + token)).thenReturn(userId.toString());
+        assertThat(jwtService.validateRefreshToken(token)).isEqualTo(userId);
+    }
+
+    @Test
+    void validateRefreshToken_returnsNullWhenMissing() {
+        when(valueOperations.get(anyString())).thenReturn(null);
+        assertThat(jwtService.validateRefreshToken("nonexistent")).isNull();
+    }
+
+    @Test
+    void revokeRefreshToken_deletesFromRedis() {
+        String token = "some-opaque-token";
+        jwtService.revokeRefreshToken(token);
+        verify(redisTemplate).delete("ga:refresh:" + token);
     }
 }

@@ -20,7 +20,6 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
-import java.net.URI;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.UUID;
@@ -46,61 +45,94 @@ public class AuthController {
                                 @RequestParam String state,
                                 HttpServletResponse response) throws IOException {
         User user = gitHubOAuthService.handleCallback(code, state);
-        String token = jwtService.generateToken(user.getId(), user.getUsername());
+        String accessToken = jwtService.generateToken(user.getId(), user.getUsername());
+        String refreshToken = jwtService.generateRefreshToken(user.getId());
 
-        ResponseCookie cookie = ResponseCookie.from("jwt", token)
-            .httpOnly(true)
-            .secure(!"false".equalsIgnoreCase(System.getenv("COOKIE_SECURE")))
-            .path("/")
-            .sameSite("Lax")
-            .maxAge(Duration.ofDays(7))
+        boolean secure = !"false".equalsIgnoreCase(System.getenv("COOKIE_SECURE"));
+
+        ResponseCookie jwtCookie = ResponseCookie.from("jwt", accessToken)
+            .httpOnly(true).secure(secure).path("/")
+            .sameSite("Lax").maxAge(Duration.ofMinutes(15))
             .build();
-        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+        ResponseCookie refreshCookie = ResponseCookie.from("refresh_token", refreshToken)
+            .httpOnly(true).secure(secure).path("/api/v1/auth/refresh")
+            .sameSite("Lax").maxAge(Duration.ofDays(30))
+            .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, jwtCookie.toString());
+        response.addHeader(HttpHeaders.SET_COOKIE, refreshCookie.toString());
 
         // Redirect to frontend dashboard
         response.sendRedirect(System.getenv().getOrDefault("FRONTEND_URL", "http://localhost:3000") + "/dashboard");
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<ApiResponse<Void>> logout(HttpServletRequest request,
-                                                     HttpServletResponse response) {
-        // Revoke JWT
+    public ResponseEntity<ApiResponse<Void>> logout(HttpServletRequest request, HttpServletResponse response) {
+        boolean secure = !"false".equalsIgnoreCase(System.getenv("COOKIE_SECURE"));
         if (request.getCookies() != null) {
             Arrays.stream(request.getCookies())
-                .filter(c -> "jwt".equals(c.getName()))
+                .filter(c -> "refresh_token".equals(c.getName()))
                 .map(Cookie::getValue)
                 .findFirst()
-                .ifPresent(jwtService::revokeToken);
+                .ifPresent(jwtService::revokeRefreshToken);
         }
+        response.addHeader(HttpHeaders.SET_COOKIE,
+            ResponseCookie.from("jwt", "").httpOnly(true).secure(secure)
+                .path("/").sameSite("Lax").maxAge(Duration.ZERO).build().toString());
+        response.addHeader(HttpHeaders.SET_COOKIE,
+            ResponseCookie.from("refresh_token", "").httpOnly(true).secure(secure)
+                .path("/api/v1/auth/refresh").sameSite("Lax").maxAge(Duration.ZERO).build().toString());
+        return ResponseEntity.ok(ApiResponse.ok(null));
+    }
 
-        // Clear cookie
-        ResponseCookie cookie = ResponseCookie.from("jwt", "")
-            .httpOnly(true)
-            .secure(!"false".equalsIgnoreCase(System.getenv("COOKIE_SECURE")))
-            .path("/")
-            .sameSite("Lax")
-            .maxAge(Duration.ZERO)
+    @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse<Void>> refresh(HttpServletRequest request, HttpServletResponse response) {
+        String refreshToken = null;
+        if (request.getCookies() != null) {
+            refreshToken = Arrays.stream(request.getCookies())
+                .filter(c -> "refresh_token".equals(c.getName()))
+                .map(Cookie::getValue)
+                .findFirst().orElse(null);
+        }
+        UUID userId = jwtService.validateRefreshToken(refreshToken);
+        if (userId == null) {
+            return ResponseEntity.status(401).body(ApiResponse.error("Invalid or expired refresh token"));
+        }
+        User user = userRepository.findById(userId)
+            .orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(401).body(ApiResponse.error("User not found"));
+        }
+        String newAccessToken = jwtService.generateToken(user.getId(), user.getUsername());
+        boolean secure = !"false".equalsIgnoreCase(System.getenv("COOKIE_SECURE"));
+        ResponseCookie jwtCookie = ResponseCookie.from("jwt", newAccessToken)
+            .httpOnly(true).secure(secure).path("/")
+            .sameSite("Lax").maxAge(Duration.ofMinutes(15))
             .build();
-        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
-
+        response.addHeader(HttpHeaders.SET_COOKIE, jwtCookie.toString());
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 
     @DeleteMapping("/account")
     public ResponseEntity<ApiResponse<Void>> deleteAccount(
             @AuthenticationPrincipal UserDetails principal,
+            HttpServletRequest request,
             HttpServletResponse response) {
         UUID userId = UUID.fromString(principal.getUsername());
         userRepository.deleteById(userId);
-        // Clear JWT cookie
-        ResponseCookie cookie = ResponseCookie.from("jwt", "")
-            .httpOnly(true)
-            .secure(!"false".equalsIgnoreCase(System.getenv("COOKIE_SECURE")))
-            .path("/")
-            .sameSite("Lax")
-            .maxAge(Duration.ZERO)
-            .build();
-        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+        boolean secure = !"false".equalsIgnoreCase(System.getenv("COOKIE_SECURE"));
+        if (request.getCookies() != null) {
+            Arrays.stream(request.getCookies())
+                .filter(c -> "refresh_token".equals(c.getName()))
+                .map(Cookie::getValue)
+                .findFirst()
+                .ifPresent(jwtService::revokeRefreshToken);
+        }
+        response.addHeader(HttpHeaders.SET_COOKIE,
+            ResponseCookie.from("jwt", "").httpOnly(true).secure(secure)
+                .path("/").sameSite("Lax").maxAge(Duration.ZERO).build().toString());
+        response.addHeader(HttpHeaders.SET_COOKIE,
+            ResponseCookie.from("refresh_token", "").httpOnly(true).secure(secure)
+                .path("/api/v1/auth/refresh").sameSite("Lax").maxAge(Duration.ZERO).build().toString());
         return ResponseEntity.ok(ApiResponse.ok(null));
     }
 

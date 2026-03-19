@@ -9,15 +9,22 @@ export async function POST() {
   // Forward logout to backend
   const backendUrl = process.env.BACKEND_URL || "http://localhost:8080";
   const jwt = cookieStore.get("jwt");
+  const refreshToken = cookieStore.get("refresh_token");
 
-  if (jwt) {
+  const cookieHeader = [
+    jwt ? `jwt=${jwt.value}` : null,
+    refreshToken ? `refresh_token=${refreshToken.value}` : null,
+  ].filter(Boolean).join("; ");
+
+  if (cookieHeader) {
     await fetch(`${backendUrl}/api/v1/auth/logout`, {
       method: "POST",
-      headers: { Cookie: `jwt=${jwt.value}` },
+      headers: { Cookie: cookieHeader },
     }).catch(() => {});
   }
 
   const response = NextResponse.json({ success: true });
   response.cookies.delete("jwt");
+  response.cookies.delete("refresh_token");
   return response;
 }

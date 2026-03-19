@@ -12,8 +12,6 @@ import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.util.Base64;
 import java.util.Date;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -48,45 +46,51 @@ public class JwtService {
     public boolean isTokenValid(String token) {
         try {
             Claims claims = parseToken(token);
-            if (claims.getExpiration().before(new Date())) return false;
-            String hash = hashToken(token);
-            try {
-                return Boolean.FALSE.equals(redisTemplate.hasKey("ga:token:revoked:" + hash));
-            } catch (Exception redisEx) {
-                log.error("Redis unavailable during token validation, failing closed: {}", redisEx.getMessage());
-                return false;
-            }
+            return !claims.getExpiration().before(new Date());
         } catch (JwtException | IllegalArgumentException e) {
             return false;
         }
-    }
-
-    public void revokeToken(String token) {
-        String hash = hashToken(token);
-        redisTemplate.opsForValue().set(
-            "ga:token:revoked:" + hash,
-            "1",
-            appProperties.getRedis().getTokenRevokedTtl(),
-            TimeUnit.SECONDS
-        );
     }
 
     public UUID extractUserId(String token) {
         return UUID.fromString(parseToken(token).getSubject());
     }
 
+    public String generateRefreshToken(UUID userId) {
+        String token = java.util.UUID.randomUUID().toString() +
+                       java.util.UUID.randomUUID().toString(); // 64-char opaque token
+        redisTemplate.opsForValue().set(
+            "ga:refresh:" + token,
+            userId.toString(),
+            appProperties.getJwt().getRefreshTokenTtlSeconds(),
+            TimeUnit.SECONDS
+        );
+        return token;
+    }
+
+    public UUID validateRefreshToken(String token) {
+        if (token == null || token.isBlank()) return null;
+        try {
+            Object val = redisTemplate.opsForValue().get("ga:refresh:" + token);
+            if (val == null) return null;
+            return UUID.fromString(val.toString());
+        } catch (Exception e) {
+            log.warn("Refresh token validation failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    public void revokeRefreshToken(String token) {
+        if (token == null || token.isBlank()) return;
+        try {
+            redisTemplate.delete("ga:refresh:" + token);
+        } catch (Exception e) {
+            log.warn("Failed to revoke refresh token: {}", e.getMessage());
+        }
+    }
+
     private SecretKey getKey() {
         byte[] keyBytes = appProperties.getJwt().getSecret().getBytes(StandardCharsets.UTF_8);
         return Keys.hmacShaKeyFor(keyBytes);
-    }
-
-    private String hashToken(String token) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));
-            return Base64.getEncoder().encodeToString(hash);
-        } catch (Exception e) {
-            throw new RuntimeException("Hashing failed", e);
-        }
     }
 }

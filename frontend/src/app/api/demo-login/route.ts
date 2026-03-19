@@ -14,6 +14,7 @@ export async function GET() {
 
     const body = await res.json();
     const token: string = body?.data?.token;
+    const refreshToken: string = body?.data?.refreshToken;
 
     if (!token) {
       return new NextResponse("Demo token missing", { status: 500 });
@@ -23,9 +24,17 @@ export async function GET() {
     response.cookies.set("jwt", token, {
       httpOnly: true,
       path: "/",
-      maxAge: 7 * 24 * 60 * 60,
+      maxAge: 15 * 60,
       sameSite: "lax",
     });
+    if (refreshToken) {
+      response.cookies.set("refresh_token", refreshToken, {
+        httpOnly: true,
+        path: "/api/auth/refresh",
+        maxAge: 30 * 24 * 60 * 60,
+        sameSite: "lax",
+      });
+    }
 
     return response;
   } catch {

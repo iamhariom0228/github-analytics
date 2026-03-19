@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const PUBLIC_PATHS = ["/", "/explore", "/share", "/api/backend/auth/github", "/api/demo-login", "/api/auth/logout"];
+const PUBLIC_PATHS = ["/", "/explore", "/share", "/api/backend/auth/github", "/api/demo-login", "/api/auth/logout", "/api/auth/refresh"];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Allow public paths and Next.js internals
   if (
     PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/")) ||
     pathname.startsWith("/_next") ||
@@ -14,9 +13,15 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check for JWT cookie
   const jwt = request.cookies.get("jwt");
   if (!jwt) {
+    // No access token — try to silently refresh if we have a refresh token
+    const refreshToken = request.cookies.get("refresh_token");
+    if (refreshToken) {
+      const refreshUrl = new URL("/api/auth/refresh", request.url);
+      refreshUrl.searchParams.set("next", pathname);
+      return NextResponse.redirect(refreshUrl);
+    }
     return NextResponse.redirect(new URL("/", request.url));
   }
 
@@ -27,7 +32,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    "/((?!_next/static|_next/image|favicon.ico).*)",
-  ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
