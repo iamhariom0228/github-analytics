@@ -11,8 +11,10 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
+import org.springframework.web.util.UriUtils;
 import reactor.core.publisher.Mono;
 
+import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -33,6 +35,10 @@ public class GitHubApiClient {
     private final RedisTemplate<String, Object> redisTemplate;
     private final AppProperties appProperties;
     private final ObjectMapper objectMapper;
+
+    private String enc(String segment) {
+        return UriUtils.encodePathSegment(segment, StandardCharsets.UTF_8);
+    }
 
     public List<GitHubRepoDto> getUserRepos(String accessToken, UUID userId) {
         List<GitHubRepoDto> all = new ArrayList<>();
@@ -60,7 +66,7 @@ public class GitHubApiClient {
         while (true) {
             List<GitHubCommitDto> batch = get(
                 accessToken, userId,
-                "/repos/" + owner + "/" + repo + "/commits?per_page=" + PER_PAGE
+                "/repos/" + enc(owner) + "/" + enc(repo) + "/commits?per_page=" + PER_PAGE
                     + "&page=" + page + sinceParam,
                 GitHubCommitDto.class
             );
@@ -80,7 +86,7 @@ public class GitHubApiClient {
         while (true) {
             List<GitHubPRDto> batch = get(
                 accessToken, userId,
-                "/repos/" + owner + "/" + repo + "/pulls?state=all&per_page=" + PER_PAGE + "&page=" + page,
+                "/repos/" + enc(owner) + "/" + enc(repo) + "/pulls?state=all&per_page=" + PER_PAGE + "&page=" + page,
                 GitHubPRDto.class
             );
             if (batch.isEmpty()) break;
@@ -104,7 +110,7 @@ public class GitHubApiClient {
         try {
             return webClientBuilder.build()
                 .get()
-                .uri(GITHUB_API_BASE + "/repos/" + owner + "/" + repo + "/pulls/" + prNumber)
+                .uri(GITHUB_API_BASE + "/repos/" + enc(owner) + "/" + enc(repo) + "/pulls/" + prNumber)
                 .header("Authorization", "Bearer " + accessToken)
                 .header("Accept", "application/vnd.github+json")
                 .exchangeToMono(resp -> {
@@ -131,7 +137,7 @@ public class GitHubApiClient {
         try {
             return webClientBuilder.build()
                 .get()
-                .uri(GITHUB_API_BASE + "/repos/" + owner + "/" + repo + "/commits/" + sha)
+                .uri(GITHUB_API_BASE + "/repos/" + enc(owner) + "/" + enc(repo) + "/commits/" + enc(sha))
                 .header("Authorization", "Bearer " + accessToken)
                 .header("Accept", "application/vnd.github+json")
                 .exchangeToMono(resp -> {
@@ -155,7 +161,7 @@ public class GitHubApiClient {
     public List<GitHubReviewDto> getReviews(String accessToken, UUID userId,
                                              String owner, String repo, int prNumber) {
         return get(accessToken, userId,
-            "/repos/" + owner + "/" + repo + "/pulls/" + prNumber + "/reviews?per_page=100",
+            "/repos/" + enc(owner) + "/" + enc(repo) + "/pulls/" + prNumber + "/reviews?per_page=100",
             GitHubReviewDto.class);
     }
 
@@ -163,7 +169,7 @@ public class GitHubApiClient {
                                         String owner, String repo, String webhookUrl, String secret) {
         return webClientBuilder.build()
             .post()
-            .uri(GITHUB_API_BASE + "/repos/" + owner + "/" + repo + "/hooks")
+            .uri(GITHUB_API_BASE + "/repos/" + enc(owner) + "/" + enc(repo) + "/hooks")
             .header("Authorization", "Bearer " + accessToken)
             .header("Accept", "application/vnd.github+json")
             .bodyValue(Map.of(
@@ -241,13 +247,15 @@ public class GitHubApiClient {
             if (since != null) args.append(", since: \"").append(since).append("\"");
             if (cursor != null) args.append(", after: \"").append(cursor).append("\"");
 
+            String safeOwner = owner.replace("\\", "\\\\").replace("\"", "\\\"");
+            String safeRepo  = repo.replace("\\", "\\\\").replace("\"", "\\\"");
             String query = String.format(
                 "{ repository(owner: \"%s\", name: \"%s\") { defaultBranchRef { target { " +
                 "... on Commit { history(%s) { pageInfo { hasNextPage endCursor } " +
                 "nodes { oid additions deletions committedDate message " +
                 "author { email user { login databaseId } } " +
                 "committer { user { login databaseId } } } } } } } } }",
-                owner, repo, args);
+                safeOwner, safeRepo, args);
 
             checkRateLimit(userId);
             try {
@@ -518,7 +526,7 @@ public class GitHubApiClient {
         try {
             Map<String, Object> result = webClientBuilder.build()
                 .post()
-                .uri(GITHUB_API_BASE + "/repos/" + owner + "/" + repo + "/forks")
+                .uri(GITHUB_API_BASE + "/repos/" + enc(owner) + "/" + enc(repo) + "/forks")
                 .header("Authorization", "Bearer " + accessToken)
                 .header("Accept", "application/vnd.github+json")
                 .bodyValue(Map.of())
@@ -543,7 +551,7 @@ public class GitHubApiClient {
         try {
             Map<String, Long> result = (Map<String, Long>) webClientBuilder.build()
                 .get()
-                .uri(GITHUB_API_BASE + "/repos/" + owner + "/" + repo + "/languages")
+                .uri(GITHUB_API_BASE + "/repos/" + enc(owner) + "/" + enc(repo) + "/languages")
                 .header("Authorization", "Bearer " + accessToken)
                 .header("Accept", "application/vnd.github+json")
                 .exchangeToMono(resp -> {
@@ -581,7 +589,7 @@ public class GitHubApiClient {
         while (true) {
             List<GitHubIssueDto> batch = get(
                 accessToken, userId,
-                "/repos/" + owner + "/" + repo + "/issues?state=all&per_page=" + PER_PAGE
+                "/repos/" + enc(owner) + "/" + enc(repo) + "/issues?state=all&per_page=" + PER_PAGE
                     + "&page=" + page + sinceParam,
                 GitHubIssueDto.class
             );

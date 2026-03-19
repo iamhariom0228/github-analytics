@@ -50,7 +50,12 @@ public class JwtService {
             Claims claims = parseToken(token);
             if (claims.getExpiration().before(new Date())) return false;
             String hash = hashToken(token);
-            return Boolean.FALSE.equals(redisTemplate.hasKey("ga:token:revoked:" + hash));
+            try {
+                return Boolean.FALSE.equals(redisTemplate.hasKey("ga:token:revoked:" + hash));
+            } catch (Exception redisEx) {
+                log.error("Redis unavailable during token validation, failing closed: {}", redisEx.getMessage());
+                return false;
+            }
         } catch (JwtException | IllegalArgumentException e) {
             return false;
         }

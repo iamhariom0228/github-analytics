@@ -40,6 +40,22 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return;
         }
 
+        // IP-based rate limiting for unauthenticated public and dev endpoints
+        if (path.startsWith("/public/") || path.startsWith("/dev/")) {
+            String ip = getClientIp(request);
+            String ipKey = "ga:ratelimit:ip:" + ip;
+            Long ipCount = redisTemplate.opsForValue().increment(ipKey);
+            if (ipCount == 1) {
+                redisTemplate.expire(ipKey, 60, TimeUnit.SECONDS);
+            }
+            if (ipCount != null && ipCount > 30) {
+                response.setStatus(429);
+                response.setContentType("application/json");
+                response.getWriter().write("{\"success\":false,\"error\":\"Rate limit exceeded\"}");
+                return;
+            }
+        }
+
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated() || "anonymousUser".equals(auth.getPrincipal())) {
             filterChain.doFilter(request, response);
@@ -68,5 +84,13 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    private String getClientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            return forwarded.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 }

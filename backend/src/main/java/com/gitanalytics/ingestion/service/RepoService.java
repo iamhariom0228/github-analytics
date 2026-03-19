@@ -57,8 +57,10 @@ public class RepoService {
         }
     }
 
-    public List<RepoDto> getUserRepos(UUID userId) {
+    public List<RepoDto> getUserRepos(UUID userId, int page, int size) {
         return trackedRepoDao.findByUserId(userId).stream()
+            .skip((long) page * size)
+            .limit(size)
             .map(this::toDto)
             .toList();
     }
@@ -165,7 +167,7 @@ public class RepoService {
 
     private SyncJob triggerSync(User user, TrackedRepo repo, String syncType) {
         String lockKey = "ga:sync:lock:" + repo.getId();
-        Boolean locked = redisTemplate.opsForValue().setIfAbsent(lockKey, "locked", 5, TimeUnit.MINUTES);
+        Boolean locked = redisTemplate.opsForValue().setIfAbsent(lockKey, "locked", appProperties.getRedis().getSyncLockTtl(), TimeUnit.SECONDS);
         // TRUE = lock acquired; FALSE = already locked; null = Redis error → treat as locked to be safe
         if (!Boolean.TRUE.equals(locked)) {
             throw new IllegalStateException("Sync already in progress for this repository");

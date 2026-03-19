@@ -2,13 +2,13 @@ package com.gitanalytics.analytics.controller;
 
 import com.gitanalytics.analytics.dto.*;
 import com.gitanalytics.analytics.service.AnalyticsService;
-import com.gitanalytics.auth.repository.UserRepository;
-import com.gitanalytics.shared.exception.ResourceNotFoundException;
 import com.gitanalytics.shared.util.ApiResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,7 +22,16 @@ import java.util.UUID;
 public class AnalyticsController {
 
     private final AnalyticsService analyticsService;
-    private final UserRepository userRepository;
+
+    private String getLogin() {
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth instanceof UsernamePasswordAuthenticationToken upat
+                && upat.getDetails() instanceof String login) {
+            return login;
+        }
+        // fallback (shouldn't happen for authenticated requests)
+        throw new IllegalStateException("Username not available in security context");
+    }
 
     @GetMapping("/commits/heatmap")
     public ResponseEntity<ApiResponse<List<HeatmapCellDto>>> getHeatmap(
@@ -59,8 +68,7 @@ public class AnalyticsController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to) {
         UUID userId = UUID.fromString(principal.getUsername());
-        String login = userRepository.findById(userId)
-            .orElseThrow(() -> new ResourceNotFoundException("User not found")).getUsername();
+        String login = getLogin();
         return ResponseEntity.ok(ApiResponse.ok(analyticsService.getReviewsSummary(userId, login, from, to)));
     }
 
@@ -69,8 +77,7 @@ public class AnalyticsController {
             @AuthenticationPrincipal UserDetails principal,
             @RequestParam(defaultValue = "UTC") String timezone) {
         UUID userId = UUID.fromString(principal.getUsername());
-        String login = userRepository.findById(userId)
-            .orElseThrow(() -> new ResourceNotFoundException("User not found")).getUsername();
+        String login = getLogin();
         return ResponseEntity.ok(ApiResponse.ok(analyticsService.getStreak(userId, login, timezone)));
     }
 
@@ -108,8 +115,7 @@ public class AnalyticsController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to) {
         UUID userId = UUID.fromString(principal.getUsername());
-        String login = userRepository.findById(userId)
-            .orElseThrow(() -> new ResourceNotFoundException("User not found")).getUsername();
+        String login = getLogin();
         return ResponseEntity.ok(ApiResponse.ok(analyticsService.getAiSummary(userId, login, timezone, from, to)));
     }
 
@@ -136,8 +142,7 @@ public class AnalyticsController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to) {
         UUID userId = UUID.fromString(principal.getUsername());
-        String login = userRepository.findById(userId)
-            .orElseThrow(() -> new ResourceNotFoundException("User not found")).getUsername();
+        String login = getLogin();
         return ResponseEntity.ok(ApiResponse.ok(analyticsService.getCommitTrend(userId, login, granularity, from, to)));
     }
 
@@ -147,8 +152,7 @@ public class AnalyticsController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to) {
         UUID userId = UUID.fromString(principal.getUsername());
-        String login = userRepository.findById(userId)
-            .orElseThrow(() -> new ResourceNotFoundException("User not found")).getUsername();
+        String login = getLogin();
         return ResponseEntity.ok(ApiResponse.ok(analyticsService.getOverview(userId, login, from, to)));
     }
 
@@ -159,8 +163,7 @@ public class AnalyticsController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to) {
         UUID userId = UUID.fromString(principal.getUsername());
-        String login = userRepository.findById(userId)
-            .orElseThrow(() -> new ResourceNotFoundException("User not found")).getUsername();
+        String login = getLogin();
         return ResponseEntity.ok(ApiResponse.ok(analyticsService.getInsights(userId, login, timezone, from, to)));
     }
 
@@ -185,8 +188,7 @@ public class AnalyticsController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to) {
         UUID userId = UUID.fromString(principal.getUsername());
-        String login = userRepository.findById(userId)
-            .orElseThrow(() -> new ResourceNotFoundException("User not found")).getUsername();
+        String login = getLogin();
         return ResponseEntity.ok(ApiResponse.ok(analyticsService.getPRMergeRateTrend(userId, login, from, to)));
     }
 
@@ -196,8 +198,7 @@ public class AnalyticsController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to) {
         UUID userId = UUID.fromString(principal.getUsername());
-        String login = userRepository.findById(userId)
-            .orElseThrow(() -> new ResourceNotFoundException("User not found")).getUsername();
+        String login = getLogin();
         return ResponseEntity.ok(ApiResponse.ok(analyticsService.getReviewerCoverage(userId, login, from, to)));
     }
 
@@ -217,8 +218,7 @@ public class AnalyticsController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime to) {
         UUID userId = UUID.fromString(principal.getUsername());
-        String login = userRepository.findById(userId)
-            .orElseThrow(() -> new ResourceNotFoundException("User not found")).getUsername();
+        String login = getLogin();
         return ResponseEntity.ok(ApiResponse.ok(analyticsService.getCollaboration(userId, login, from, to)));
     }
 

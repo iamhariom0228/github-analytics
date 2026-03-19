@@ -27,9 +27,12 @@ public class RepoController {
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<RepoDto>>> getRepos(
-            @AuthenticationPrincipal UserDetails principal) {
+            @AuthenticationPrincipal UserDetails principal,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
         UUID userId = UUID.fromString(principal.getUsername());
-        return ResponseEntity.ok(ApiResponse.ok(repoService.getUserRepos(userId)));
+        int clampedSize = Math.min(size, 100);
+        return ResponseEntity.ok(ApiResponse.ok(repoService.getUserRepos(userId, page, clampedSize)));
     }
 
     @PostMapping

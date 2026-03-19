@@ -86,7 +86,7 @@ app:
     dashboard-cache-ttl: 300        # 5 min
     oauth-state-ttl: 600            # 10 min
     rate-limit-ttl: 3600            # 1 hr
-    sync-lock-ttl: 300              # 5 min
+    sync-lock-ttl: 1800             # 30 min — extended to prevent lock expiry on large repo syncs
     token-revoked-ttl: 3600         # 1 hr
     streak-cache-ttl: 3600          # 1 hr
 

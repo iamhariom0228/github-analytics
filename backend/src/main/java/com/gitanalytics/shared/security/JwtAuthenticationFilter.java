@@ -36,9 +36,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (StringUtils.hasText(token) && jwtService.isTokenValid(token)) {
             try {
                 Claims claims = jwtService.parseToken(token);
+                String username = claims.get("username", String.class);
                 UserDetails userDetails = userDetailsService.loadUserByUsername(claims.getSubject());
                 UsernamePasswordAuthenticationToken auth =
                     new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+                auth.setDetails(username);   // store GitHub login here
                 SecurityContextHolder.getContext().setAuthentication(auth);
             } catch (Exception e) {
                 log.debug("JWT authentication failed: {}", e.getMessage());

@@ -33,6 +33,14 @@ public class SecurityConfig {
             .csrf(AbstractHttpConfigurer::disable)
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .headers(headers -> headers
+                .httpStrictTransportSecurity(hsts -> hsts
+                    .includeSubDomains(true)
+                    .maxAgeInSeconds(31536000)
+                )
+                .frameOptions(frame -> frame.deny())
+                .contentTypeOptions(ct -> {})
+            )
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/auth/github", "/auth/github/callback").permitAll()
                 .requestMatchers("/webhooks/github").permitAll()

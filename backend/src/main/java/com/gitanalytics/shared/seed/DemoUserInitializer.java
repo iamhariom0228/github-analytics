@@ -49,5 +49,9 @@ public class DemoUserInitializer implements ApplicationRunner {
                 .build());
 
         log.info("Demo user created (id={})", demo.getId());
+
+        if (userRepository.findByGithubId(DEMO_GITHUB_ID).isEmpty()) {
+            throw new IllegalStateException("Demo user initialization failed — user not found after creation");
+        }
     }
 }
