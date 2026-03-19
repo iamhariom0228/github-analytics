@@ -412,7 +412,7 @@ public interface AnalyticsRepository extends Repository<Commit, Long> {
     // ── Stars & Forks Trend ───────────────────────────────────────────────────
 
     @Query(value = """
-        SELECT snapshotted_on::text, stars, forks, watchers
+        SELECT CAST(snapshotted_on AS text), stars, forks, watchers
         FROM repo_stats_snapshots
         WHERE repo_id = :repoId
           AND snapshotted_on >= CURRENT_DATE - INTERVAL '90 days'

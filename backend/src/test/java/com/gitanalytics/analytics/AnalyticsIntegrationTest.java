@@ -14,7 +14,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
-import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -50,10 +49,6 @@ class AnalyticsIntegrationTest {
         registry.add("spring.datasource.password", postgres::getPassword);
         registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
     }
-
-    @MockBean
-    @SuppressWarnings("rawtypes")
-    private KafkaTemplate kafkaTemplate;
 
     @MockBean
     private RedisTemplate<String, Object> redisTemplate;

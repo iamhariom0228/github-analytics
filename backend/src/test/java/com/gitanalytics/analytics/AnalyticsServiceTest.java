@@ -152,12 +152,12 @@ class AnalyticsServiceTest {
     void getStalePRs_delegatesToDao() {
         UUID userId = UUID.randomUUID();
         UUID repoId = UUID.randomUUID();
-        when(pullRequestDao.findStalePRs(eq(repoId), any())).thenReturn(Collections.emptyList());
+        when(pullRequestDao.findStalePRs(eq(userId), eq(repoId), any())).thenReturn(Collections.emptyList());
 
         List<PrSummaryDto> result = service.getStalePRs(userId, repoId, 7);
 
         assertThat(result).isEmpty();
-        verify(pullRequestDao).findStalePRs(eq(repoId), any(OffsetDateTime.class));
+        verify(pullRequestDao).findStalePRs(eq(userId), eq(repoId), any(OffsetDateTime.class));
     }
 
     // ---------- Helpers ----------
