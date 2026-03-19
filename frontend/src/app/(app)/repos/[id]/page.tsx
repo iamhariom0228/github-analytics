@@ -1,9 +1,8 @@
 "use client";
 
-import { use } from "react";
 import { useStarsForksTrend, useReleaseTrend, useIssueAnalytics, useLanguageBytes } from "@/hooks/useAnalytics";
 import { useRepos, useTriggerSync } from "@/hooks/useRepos";
-import { ArrowLeft, RefreshCw, Star, GitFork, Eye } from "lucide-react";
+import { ArrowLeft, RefreshCw, Star, GitFork } from "lucide-react";
 import Link from "next/link";
 import {
   LineChart, Line, BarChart, Bar,
@@ -18,8 +17,8 @@ const tooltipStyle = {
   fontSize: "12px",
 };
 
-export default function RepoDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function RepoDetailPage({ params }: { params: { id: string } }) {
+  const { id } = params;
 
   const { data: repos } = useRepos();
   const repo = repos?.find((r) => r.id === id);

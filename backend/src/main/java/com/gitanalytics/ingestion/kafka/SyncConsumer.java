@@ -115,7 +115,12 @@ public class SyncConsumer {
             token, user.getId(), repo.getOwner(), repo.getName(), since);
 
         Set<String> knownEmails = new HashSet<>();
-        if (user.getEmail() != null) knownEmails.add(user.getEmail().trim());
+        if (user.getEmail() != null) knownEmails.add(user.getEmail().trim().toLowerCase());
+        // GitHub noreply email patterns
+        knownEmails.add(user.getUsername().toLowerCase() + "@users.noreply.github.com");
+        if (user.getGithubId() != null) {
+            knownEmails.add(user.getGithubId() + "+" + user.getUsername().toLowerCase() + "@users.noreply.github.com");
+        }
 
         for (GitHubApiClient.GraphQLCommitDto dto : commits) {
             if (dto.getCommittedDate() == null) continue;

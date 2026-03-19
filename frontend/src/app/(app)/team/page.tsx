@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRepos } from "@/hooks/useRepos";
 import { useLeaderboard, useBusFactor, useStalePRs, useChurnLeaderboard } from "@/hooks/useAnalytics";
 import { DateRangePicker, usePresetDates, useDatePreset } from "@/components/shared/DateRangePicker";
@@ -23,6 +23,14 @@ export default function TeamPage() {
   );
   const [preset, setPreset] = useDatePreset();
   const { from, to } = usePresetDates(preset);
+
+  // If stored repo ID is no longer in the user's repo list (e.g. after switching accounts), reset it
+  useEffect(() => {
+    if (repos && repos.length > 0 && selectedRepoId && !repos.some((r) => r.id === selectedRepoId)) {
+      setSelectedRepoId(repos[0].id);
+      localStorage.setItem(STORAGE_KEY, repos[0].id);
+    }
+  }, [repos, selectedRepoId]);
 
   const repoId = selectedRepoId || repos?.[0]?.id || "";
 
