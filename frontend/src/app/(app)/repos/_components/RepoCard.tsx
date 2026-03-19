@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { RefreshCw, Trash2, Star, GitFork } from "lucide-react";
+import Link from "next/link";
 import { HealthBadge } from "./HealthBadge";
 
 const statusColor: Record<string, string> = {
@@ -35,7 +36,9 @@ export function RepoCard({ repo, expandedHealthId, onToggleHealth, onSync, onDel
   return (
     <div className="bg-card border border-border rounded-xl p-4 flex items-center justify-between gap-4">
       <div className="min-w-0 flex-1">
-        <div className="font-medium truncate">{repo.fullName}</div>
+        <Link href={`/repos/${repo.id}`} className="font-medium truncate hover:underline hover:text-primary transition-colors">
+          {repo.fullName}
+        </Link>
         {repo.description && (
           <div className="text-xs text-muted-foreground truncate mt-0.5">{repo.description}</div>
         )}
