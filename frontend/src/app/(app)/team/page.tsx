@@ -130,8 +130,7 @@ export default function TeamPage() {
                 <XAxis dataKey="login" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} tickLine={false} axisLine={false} allowDecimals={false} />
                 <Tooltip
-                  cursor={false}
-                  position={{ y: Math.round(chartHeight / 2) }}
+                  cursor={{ fill: "hsl(var(--muted))", opacity: 0.5 }}
                   contentStyle={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }}
                   formatter={(v: number, name: string) => [v.toLocaleString(), name === "added" ? "Lines Added" : "Lines Removed"]}
                 />

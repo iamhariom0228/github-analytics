@@ -5,6 +5,7 @@ import {
   useHeatmap, usePRLifecycle, usePRSizeDistribution,
   useReviewsSummary, useCommitTrend, useOverview,
   usePRMergeRateTrend, useReviewerCoverage, useCollaboration,
+  useIssueAnalytics,
 } from "@/hooks/useAnalytics";
 import { useRepos } from "@/hooks/useRepos";
 import { useAuth } from "@/hooks/useAuth";
@@ -20,19 +21,23 @@ import { ContributionHeatmapSection } from "./_components/ContributionHeatmapSec
 import { PRLifecycleSection } from "./_components/PRLifecycleSection";
 import { ReviewsSection } from "./_components/ReviewsSection";
 import { LanguageDistribution } from "./_components/LanguageDistribution";
+import { IssuesSection } from "./_components/IssuesSection";
 import { ContributorNetworkGraph } from "@/components/charts/ContributorNetworkGraph";
 import { useCreateShare } from "@/hooks/useAnalytics";
 
-const tabs = ["Commits", "Pull Requests", "Reviews", "Languages"] as const;
+const tabs = ["Commits", "Pull Requests", "Reviews", "Languages", "Issues"] as const;
 type Tab = (typeof tabs)[number];
 
 export default function AnalyticsPage() {
   const [tab, setTab] = useState<Tab>("Commits");
   const [preset, setPreset] = useDatePreset();
   const [granularity, setGranularity] = useState<"daily" | "weekly">("daily");
+  const [issueRepoId, setIssueRepoId] = useState<string | undefined>(undefined);
   const { from, to } = usePresetDates(preset);
 
   const { data: repos } = useRepos();
+  const selectedIssueRepo = issueRepoId ?? repos?.[0]?.id;
+  const { data: issueData, isLoading: issueLoading } = useIssueAnalytics(selectedIssueRepo);
   const { data: authUser } = useAuth();
   const { data: heatmap, isLoading: heatmapLoading } = useHeatmap(undefined, undefined, from, to);
   const { data: trend, isLoading: trendLoading } = useCommitTrend(from, to, granularity);
@@ -189,6 +194,26 @@ export default function AnalyticsPage() {
             </p>
             <LanguageDistribution repos={repos ?? []} />
           </div>
+        </div>
+      )}
+
+      {tab === "Issues" && (
+        <div className="space-y-4">
+          {repos && repos.length > 1 && (
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-muted-foreground">Repository:</label>
+              <select
+                value={selectedIssueRepo ?? ""}
+                onChange={(e) => setIssueRepoId(e.target.value)}
+                className="text-sm border border-border rounded-lg px-3 py-1.5 bg-background"
+              >
+                {repos.map((r) => (
+                  <option key={r.id} value={r.id}>{r.fullName}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          <IssuesSection repoId={selectedIssueRepo} data={issueData} isLoading={issueLoading} />
         </div>
       )}
 

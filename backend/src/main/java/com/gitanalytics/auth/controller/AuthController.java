@@ -4,6 +4,7 @@ import com.gitanalytics.auth.dto.UserProfileDto;
 import com.gitanalytics.auth.entity.User;
 import com.gitanalytics.auth.repository.UserRepository;
 import com.gitanalytics.auth.service.GitHubOAuthService;
+import com.gitanalytics.shared.config.AppProperties;
 import com.gitanalytics.shared.exception.ResourceNotFoundException;
 import com.gitanalytics.shared.security.JwtService;
 import com.gitanalytics.shared.util.ApiResponse;
@@ -33,6 +34,7 @@ public class AuthController {
     private final GitHubOAuthService gitHubOAuthService;
     private final JwtService jwtService;
     private final UserRepository userRepository;
+    private final AppProperties appProperties;
 
     @GetMapping("/github")
     public void initiateOAuth(HttpServletResponse response) throws IOException {
@@ -48,7 +50,7 @@ public class AuthController {
         String accessToken = jwtService.generateToken(user.getId(), user.getUsername());
         String refreshToken = jwtService.generateRefreshToken(user.getId());
 
-        boolean secure = !"false".equalsIgnoreCase(System.getenv("COOKIE_SECURE"));
+        boolean secure = appProperties.isCookieSecure();
 
         ResponseCookie jwtCookie = ResponseCookie.from("jwt", accessToken)
             .httpOnly(true).secure(secure).path("/")
@@ -62,13 +64,18 @@ public class AuthController {
         response.addHeader(HttpHeaders.SET_COOKIE, refreshCookie.toString());
 
         // Redirect to frontend dashboard
-        response.sendRedirect(System.getenv().getOrDefault("FRONTEND_URL", "http://localhost:3000") + "/dashboard");
+        response.sendRedirect(appProperties.getFrontendUrl() + "/dashboard");
     }
 
     @PostMapping("/logout")
     public ResponseEntity<ApiResponse<Void>> logout(HttpServletRequest request, HttpServletResponse response) {
-        boolean secure = !"false".equalsIgnoreCase(System.getenv("COOKIE_SECURE"));
+        boolean secure = appProperties.isCookieSecure();
         if (request.getCookies() != null) {
+            Arrays.stream(request.getCookies())
+                .filter(c -> "jwt".equals(c.getName()))
+                .map(Cookie::getValue)
+                .findFirst()
+                .ifPresent(jwtService::revokeToken);
             Arrays.stream(request.getCookies())
                 .filter(c -> "refresh_token".equals(c.getName()))
                 .map(Cookie::getValue)
@@ -103,7 +110,7 @@ public class AuthController {
             return ResponseEntity.status(401).body(ApiResponse.error("User not found"));
         }
         String newAccessToken = jwtService.generateToken(user.getId(), user.getUsername());
-        boolean secure = !"false".equalsIgnoreCase(System.getenv("COOKIE_SECURE"));
+        boolean secure = appProperties.isCookieSecure();
         ResponseCookie jwtCookie = ResponseCookie.from("jwt", newAccessToken)
             .httpOnly(true).secure(secure).path("/")
             .sameSite("Lax").maxAge(Duration.ofMinutes(15))
@@ -119,7 +126,7 @@ public class AuthController {
             HttpServletResponse response) {
         UUID userId = UUID.fromString(principal.getUsername());
         userRepository.deleteById(userId);
-        boolean secure = !"false".equalsIgnoreCase(System.getenv("COOKIE_SECURE"));
+        boolean secure = appProperties.isCookieSecure();
         if (request.getCookies() != null) {
             Arrays.stream(request.getCookies())
                 .filter(c -> "refresh_token".equals(c.getName()))

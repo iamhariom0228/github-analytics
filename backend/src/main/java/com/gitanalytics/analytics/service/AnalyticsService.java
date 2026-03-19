@@ -10,16 +10,16 @@ import com.gitanalytics.ingestion.dao.ReleaseDao;
 import com.gitanalytics.ingestion.entity.Commit;
 import com.gitanalytics.ingestion.dao.TrackedRepoDao;
 import com.gitanalytics.ingestion.entity.PullRequest;
+import com.gitanalytics.shared.cache.CacheRepository;
 import com.gitanalytics.shared.client.GroqApiClient;
+import com.gitanalytics.shared.config.AppProperties;
 import com.gitanalytics.shared.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.*;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Service
@@ -32,8 +32,9 @@ public class AnalyticsService {
     private final PullRequestDao pullRequestDao;
     private final ReleaseDao releaseDao;
     private final TrackedRepoDao trackedRepoDao;
-    private final RedisTemplate<String, Object> redisTemplate;
+    private final CacheRepository cacheRepository;
     private final GroqApiClient groqApiClient;
+    private final AppProperties appProperties;
 
     // ── Timezone Helper ───────────────────────────────────────────────────────
 
@@ -48,42 +49,40 @@ public class AnalyticsService {
     // ── Dashboard ─────────────────────────────────────────────────────────────
 
     public DashboardSummaryDto getDashboard(UUID userId) {
-        String cacheKey = "ga:dashboard:" + userId;
-        Object cached = redisTemplate.opsForValue().get(cacheKey);
-        if (cached instanceof DashboardSummaryDto dto) return dto;
+        return cacheRepository.cached(
+            "ga:dashboard:" + userId,
+            appProperties.getRedis().getDashboardCacheTtl(),
+            () -> {
+                User user = userDao.findById(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        User user = userDao.findById(userId)
-            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                OffsetDateTime weekAgo = OffsetDateTime.now().minusWeeks(1);
+                OffsetDateTime monthAgo = OffsetDateTime.now().minusMonths(1);
+                OffsetDateTime now = OffsetDateTime.now();
 
-        OffsetDateTime weekAgo = OffsetDateTime.now().minusWeeks(1);
-        OffsetDateTime monthAgo = OffsetDateTime.now().minusMonths(1);
-        OffsetDateTime now = OffsetDateTime.now();
+                long weeklyCommits = analyticsDao.countCommits(userId, user.getUsername(), weekAgo, now);
 
-        long weeklyCommits = analyticsDao.countCommits(userId, user.getUsername(), weekAgo, now);
+                List<PullRequest> recentPrs = pullRequestDao.findByUserAndAuthorAndDateRange(
+                    userId, user.getUsername(), monthAgo, now);
 
-        List<PullRequest> recentPrs = pullRequestDao.findByUserAndAuthorAndDateRange(
-            userId, user.getUsername(), monthAgo, now);
+                long mergedCount = recentPrs.stream().filter(p -> p.getMergedAt() != null).count();
+                double avgMergeHours = recentPrs.stream()
+                    .filter(p -> p.getMergedAt() != null && p.getCreatedAt() != null)
+                    .mapToDouble(p -> Duration.between(p.getCreatedAt(), p.getMergedAt()).toMinutes() / 60.0)
+                    .average().orElse(0);
 
-        long mergedCount = recentPrs.stream().filter(p -> p.getMergedAt() != null).count();
-        double avgMergeHours = recentPrs.stream()
-            .filter(p -> p.getMergedAt() != null && p.getCreatedAt() != null)
-            .mapToDouble(p -> Duration.between(p.getCreatedAt(), p.getMergedAt()).toMinutes() / 60.0)
-            .average().orElse(0);
+                StreakDto streak = getStreak(userId, user.getUsername(), "UTC");
 
-        StreakDto streak = getStreak(userId, user.getUsername(), "UTC");
-
-        DashboardSummaryDto dto = DashboardSummaryDto.builder()
-            .weeklyCommits(weeklyCommits)
-            .monthlyPRsMerged(mergedCount)
-            .avgMergeTimeHours(avgMergeHours)
-            .currentStreak(streak.getCurrentStreak())
-            .recentPRs(recentPrs.stream().limit(5).map(pr -> new PrSummaryDto(
-                pr.getId(), pr.getPrNumber(), pr.getTitle(),
-                pr.getState().name(), pr.getCreatedAt())).toList())
-            .build();
-
-        redisTemplate.opsForValue().set(cacheKey, dto, 5, TimeUnit.MINUTES);
-        return dto;
+                return DashboardSummaryDto.builder()
+                    .weeklyCommits(weeklyCommits)
+                    .monthlyPRsMerged(mergedCount)
+                    .avgMergeTimeHours(avgMergeHours)
+                    .currentStreak(streak.getCurrentStreak())
+                    .recentPRs(recentPrs.stream().limit(5).map(pr -> new PrSummaryDto(
+                        pr.getId(), pr.getPrNumber(), pr.getTitle(),
+                        pr.getState().name(), pr.getCreatedAt())).toList())
+                    .build();
+            });
     }
 
     // ── Commit Heatmap ────────────────────────────────────────────────────────
@@ -100,106 +99,121 @@ public class AnalyticsService {
                 throw new IllegalArgumentException("Invalid repoId: " + repoId);
             }
         }
-        return analyticsDao.getCommitHeatmap(
-            userId,
-            tz,
-            repoUuid,
-            from, to);
+        final UUID finalRepoUuid = repoUuid;
+        return cacheRepository.cached(CacheRepository.key("heatmap", userId, repoId, tz, from, to),
+            appProperties.getRedis().getAnalyticsCacheTtl(),
+            () -> analyticsDao.getCommitHeatmap(userId, tz, finalRepoUuid, from, to));
     }
 
     // ── PR Lifecycle ──────────────────────────────────────────────────────────
 
     public PRLifecycleDto getPRLifecycle(UUID userId, OffsetDateTime from, OffsetDateTime to) {
-        Object[] row = analyticsDao.getPRLifecycleStats(userId, from, to);
-        return PRLifecycleDto.builder()
-            .avgHoursToFirstReview(row[0] != null ? ((Number) row[0]).doubleValue() : 0)
-            .avgHoursToMerge(row[1] != null ? ((Number) row[1]).doubleValue() : 0)
-            .mergedCount(row[2] != null ? ((Number) row[2]).longValue() : 0)
-            .totalCount(row[3] != null ? ((Number) row[3]).longValue() : 0)
-            .build();
+        return cacheRepository.cached(CacheRepository.key("pr-lifecycle", userId, from, to),
+            appProperties.getRedis().getAnalyticsCacheTtl(),
+            () -> {
+                Object[] row = analyticsDao.getPRLifecycleStats(userId, from, to);
+                return PRLifecycleDto.builder()
+                    .avgHoursToFirstReview(row[0] != null ? ((Number) row[0]).doubleValue() : 0)
+                    .avgHoursToMerge(row[1] != null ? ((Number) row[1]).doubleValue() : 0)
+                    .mergedCount(row[2] != null ? ((Number) row[2]).longValue() : 0)
+                    .totalCount(row[3] != null ? ((Number) row[3]).longValue() : 0)
+                    .build();
+            });
     }
 
     // ── PR Size Distribution ──────────────────────────────────────────────────
 
     public PRSizeDistributionDto getPRSizeDistribution(UUID userId, OffsetDateTime from, OffsetDateTime to) {
-        User user = userDao.findById(userId).orElseThrow();
-        List<PullRequest> prs = pullRequestDao.findByUserAndAuthorAndDateRange(userId, user.getUsername(), from, to);
+        return cacheRepository.cached(CacheRepository.key("pr-size", userId, from, to),
+            appProperties.getRedis().getAnalyticsCacheTtl(),
+            () -> {
+                User user = userDao.findById(userId).orElseThrow();
+                List<PullRequest> prs = pullRequestDao.findByUserAndAuthorAndDateRange(userId, user.getUsername(), from, to);
 
-        Map<String, Long> buckets = new LinkedHashMap<>();
-        buckets.put("XS", 0L);
-        buckets.put("S", 0L);
-        buckets.put("M", 0L);
-        buckets.put("L", 0L);
-        buckets.put("XL", 0L);
+                Map<String, Long> buckets = new LinkedHashMap<>();
+                buckets.put("XS", 0L); buckets.put("S", 0L); buckets.put("M", 0L);
+                buckets.put("L", 0L); buckets.put("XL", 0L);
 
-        for (PullRequest pr : prs) {
-            int files = pr.getChangedFiles();
-            if (files < 10) buckets.merge("XS", 1L, Long::sum);
-            else if (files < 50) buckets.merge("S", 1L, Long::sum);
-            else if (files < 200) buckets.merge("M", 1L, Long::sum);
-            else if (files < 1000) buckets.merge("L", 1L, Long::sum);
-            else buckets.merge("XL", 1L, Long::sum);
-        }
-        return new PRSizeDistributionDto(buckets);
+                for (PullRequest pr : prs) {
+                    int files = pr.getChangedFiles();
+                    if (files < 10) buckets.merge("XS", 1L, Long::sum);
+                    else if (files < 50) buckets.merge("S", 1L, Long::sum);
+                    else if (files < 200) buckets.merge("M", 1L, Long::sum);
+                    else if (files < 1000) buckets.merge("L", 1L, Long::sum);
+                    else buckets.merge("XL", 1L, Long::sum);
+                }
+                return new PRSizeDistributionDto(buckets);
+            });
     }
 
     // ── Team Leaderboard ──────────────────────────────────────────────────────
 
     public List<ContributorStatsDto> getTeamLeaderboard(UUID userId, UUID repoId,
                                                           OffsetDateTime from, OffsetDateTime to) {
-        return analyticsDao.getTeamLeaderboard(userId, repoId, from, to);
+        return cacheRepository.cached(CacheRepository.key("leaderboard", userId, repoId, from, to),
+            appProperties.getRedis().getAnalyticsCacheTtl(),
+            () -> analyticsDao.getTeamLeaderboard(userId, repoId, from, to));
     }
 
     // ── Bus Factor ────────────────────────────────────────────────────────────
 
     public BusFactorDto getBusFactor(UUID userId, UUID repoId) {
-        List<Object[]> rows = analyticsDao.getBusFactorRows(userId, repoId);
-        if (rows.isEmpty()) return new BusFactorDto(null, 0, 0);
-
-        long total = rows.stream().mapToLong(r -> ((Number) r[1]).longValue()).sum();
-        long top = ((Number) rows.get(0)[1]).longValue();
-        double pct = total > 0 ? (double) top / total * 100 : 0;
-        return new BusFactorDto((String) rows.get(0)[0], pct, rows.size());
+        return cacheRepository.cached(CacheRepository.key("bus-factor", userId, repoId),
+            appProperties.getRedis().getAnalyticsCacheTtl(),
+            () -> {
+                List<Object[]> rows = analyticsDao.getBusFactorRows(userId, repoId);
+                if (rows.isEmpty()) return new BusFactorDto(null, 0, 0);
+                long total = rows.stream().mapToLong(r -> ((Number) r[1]).longValue()).sum();
+                long top = ((Number) rows.get(0)[1]).longValue();
+                double pct = total > 0 ? (double) top / total * 100 : 0;
+                return new BusFactorDto((String) rows.get(0)[0], pct, rows.size());
+            });
     }
 
     // ── Contribution Streak ───────────────────────────────────────────────────
 
     public StreakDto getStreak(UUID userId, String login, String timezone) {
-        String cacheKey = "ga:streak:" + userId;
-        Object cached = redisTemplate.opsForValue().get(cacheKey);
-        if (cached instanceof StreakDto dto) return dto;
-
-        try {
-            Object[] row = analyticsDao.getStreakData(userId, login, timezone);
-            int longest = row[0] != null ? ((Number) row[0]).intValue() : 0;
-            int current = 0;
-            if (row.length > 2 && row[1] != null && row[2] != null) {
-                LocalDate lastDay = switch (row[2]) {
-                    case java.sql.Date d -> d.toLocalDate();
-                    case LocalDate d -> d;
-                    default -> LocalDate.parse(row[2].toString().substring(0, 10));
-                };
-                LocalDate today = LocalDate.now(parseTimezone(timezone));
-                if (!lastDay.isBefore(today.minusDays(1))) {
-                    current = ((Number) row[1]).intValue();
+        return cacheRepository.cached(
+            "ga:streak:" + userId,
+            appProperties.getRedis().getStreakCacheTtl(),
+            () -> {
+                try {
+                    Object[] row = analyticsDao.getStreakData(userId, login, timezone);
+                    int longest = row[0] != null ? ((Number) row[0]).intValue() : 0;
+                    int current = 0;
+                    if (row.length > 2 && row[1] != null && row[2] != null) {
+                        LocalDate lastDay = switch (row[2]) {
+                            case java.sql.Date d -> d.toLocalDate();
+                            case LocalDate d -> d;
+                            default -> LocalDate.parse(row[2].toString().substring(0, 10));
+                        };
+                        LocalDate today = LocalDate.now(parseTimezone(timezone));
+                        if (!lastDay.isBefore(today.minusDays(1))) {
+                            current = ((Number) row[1]).intValue();
+                        }
+                    }
+                    return new StreakDto(current, longest);
+                } catch (Exception e) {
+                    log.debug("Streak query returned no data: {}", e.getMessage());
+                    return new StreakDto(0, 0);
                 }
-            }
-            StreakDto dto = new StreakDto(current, longest);
-            redisTemplate.opsForValue().set(cacheKey, dto, 1, TimeUnit.HOURS);
-            return dto;
-        } catch (Exception e) {
-            log.debug("Streak query returned no data: {}", e.getMessage());
-            return new StreakDto(0, 0);
-        }
+            });
     }
 
     // ── Insights ─────────────────────────────────────────────────────────────
 
     public List<InsightDto> getInsights(UUID userId, String login, String timezone,
                                         OffsetDateTime from, OffsetDateTime to) {
-        List<InsightDto> insights = new ArrayList<>();
         String tz = timezone != null ? timezone : "UTC";
         parseTimezone(tz); // validate early
+        return cacheRepository.cached(CacheRepository.key("insights", userId, login, tz, from, to),
+            appProperties.getRedis().getAnalyticsCacheTtl(),
+            () -> computeInsights(userId, login, tz, from, to));
+    }
+
+    private List<InsightDto> computeInsights(UUID userId, String login, String tz,
+                                              OffsetDateTime from, OffsetDateTime to) {
+        List<InsightDto> insights = new ArrayList<>();
 
         OffsetDateTime effectiveTo = to != null ? to : OffsetDateTime.now();
         OffsetDateTime effectiveFrom = from != null ? from : effectiveTo.minusDays(30);
@@ -340,24 +354,32 @@ public class AnalyticsService {
     // ── Reviews Summary ───────────────────────────────────────────────────────
 
     public ReviewsSummaryDto getReviewsSummary(UUID userId, String login, OffsetDateTime from, OffsetDateTime to) {
-        Object[] row = analyticsDao.getReviewsSummaryRow(userId, login, from, to);
-        long total = row[0] != null ? ((Number) row[0]).longValue() : 0;
-        long approved = row[1] != null ? ((Number) row[1]).longValue() : 0;
-        long changesRequested = row[2] != null ? ((Number) row[2]).longValue() : 0;
-        long commented = row[3] != null ? ((Number) row[3]).longValue() : 0;
-        long prsReviewed = row[4] != null ? ((Number) row[4]).longValue() : 0;
-        return new ReviewsSummaryDto(total, approved, changesRequested, commented,
-            prsReviewed > 0 ? (double) total / prsReviewed : 0);
+        return cacheRepository.cached(CacheRepository.key("reviews", userId, login, from, to),
+            appProperties.getRedis().getAnalyticsCacheTtl(),
+            () -> {
+                Object[] row = analyticsDao.getReviewsSummaryRow(userId, login, from, to);
+                long total = row[0] != null ? ((Number) row[0]).longValue() : 0;
+                long approved = row[1] != null ? ((Number) row[1]).longValue() : 0;
+                long changesRequested = row[2] != null ? ((Number) row[2]).longValue() : 0;
+                long commented = row[3] != null ? ((Number) row[3]).longValue() : 0;
+                long prsReviewed = row[4] != null ? ((Number) row[4]).longValue() : 0;
+                return new ReviewsSummaryDto(total, approved, changesRequested, commented,
+                    prsReviewed > 0 ? (double) total / prsReviewed : 0);
+            });
     }
 
     // ── Stale PRs ─────────────────────────────────────────────────────────────
 
     public List<PrSummaryDto> getStalePRs(UUID userId, UUID repoId, int olderThanDays) {
-        OffsetDateTime threshold = OffsetDateTime.now().minusDays(olderThanDays);
-        return pullRequestDao.findStalePRs(userId, repoId, threshold).stream()
-            .map(pr -> new PrSummaryDto(pr.getId(), pr.getPrNumber(), pr.getTitle(),
-                pr.getState().name(), pr.getCreatedAt()))
-            .toList();
+        return cacheRepository.cached(CacheRepository.key("stale-prs", userId, repoId, olderThanDays),
+            appProperties.getRedis().getFeedCacheTtl(),
+            () -> {
+                OffsetDateTime threshold = OffsetDateTime.now().minusDays(olderThanDays);
+                return pullRequestDao.findStalePRs(userId, repoId, threshold).stream()
+                    .map(pr -> new PrSummaryDto(pr.getId(), pr.getPrNumber(), pr.getTitle(),
+                        pr.getState().name(), pr.getCreatedAt()))
+                    .toList();
+            });
     }
 
     // ── Repo Health ───────────────────────────────────────────────────────────
@@ -365,6 +387,12 @@ public class AnalyticsService {
     public RepoHealthDto getRepoHealth(UUID userId, UUID repoId) {
         trackedRepoDao.findById(repoId)
             .orElseThrow(() -> new ResourceNotFoundException("Repository not found"));
+        return cacheRepository.cached(CacheRepository.key("repo-health", repoId),
+            appProperties.getRedis().getAnalyticsCacheTtl(),
+            () -> computeRepoHealth(repoId));
+    }
+
+    private RepoHealthDto computeRepoHealth(UUID repoId) {
 
         OffsetDateTime now = OffsetDateTime.now();
         OffsetDateTime thirtyDaysAgo = now.minusDays(30);
@@ -433,45 +461,54 @@ public class AnalyticsService {
     public PublicRepoStatsDto getPublicRepoStats(UUID userId, UUID repoId) {
         var repo = trackedRepoDao.findById(repoId)
             .orElseThrow(() -> new ResourceNotFoundException("Repository not found"));
+        return cacheRepository.cached(CacheRepository.key("repo-stats", repoId),
+            appProperties.getRedis().getAnalyticsCacheTtl(),
+            () -> {
+                long totalCommits = analyticsDao.countCommitsByRepo(repoId);
 
-        long totalCommits = analyticsDao.countCommitsByRepo(repoId);
+                Object[] prStats = analyticsDao.getPRStatsByRepo(repoId);
+                long totalPRs = ((Number) prStats[0]).longValue();
+                long mergedPRs = ((Number) prStats[1]).longValue();
+                double avgMerge = prStats[2] != null ? ((Number) prStats[2]).doubleValue() : 0;
 
-        Object[] prStats = analyticsDao.getPRStatsByRepo(repoId);
-        long totalPRs = ((Number) prStats[0]).longValue();
-        long mergedPRs = ((Number) prStats[1]).longValue();
-        double avgMerge = prStats[2] != null ? ((Number) prStats[2]).doubleValue() : 0;
+                List<Object[]> topRows = analyticsDao.getTopContributorByRepo(repoId);
+                String topContributor = topRows.isEmpty() ? null : (String) topRows.get(0)[0];
+                long topCount = topRows.isEmpty() ? 0 : ((Number) topRows.get(0)[1]).longValue();
+                int topPct = totalCommits > 0 ? (int) (topCount * 100 / totalCommits) : 0;
 
-        List<Object[]> topRows = analyticsDao.getTopContributorByRepo(repoId);
-        String topContributor = topRows.isEmpty() ? null : (String) topRows.get(0)[0];
-        long topCount = topRows.isEmpty() ? 0 : ((Number) topRows.get(0)[1]).longValue();
-        int topPct = totalCommits > 0 ? (int) (topCount * 100 / totalCommits) : 0;
+                RepoHealthDto health = getRepoHealth(userId, repoId);
 
-        RepoHealthDto health = getRepoHealth(userId, repoId);
-
-        return new PublicRepoStatsDto(
-            repo.getFullName(), null, 0, 0, 0, null, Map.of(),
-            health.score(), health.label(),
-            totalCommits, totalPRs, mergedPRs, avgMerge,
-            topContributor, topPct, true);
+                return new PublicRepoStatsDto(
+                    repo.getFullName(), null, 0, 0, 0, null, Map.of(),
+                    health.score(), health.label(),
+                    totalCommits, totalPRs, mergedPRs, avgMerge,
+                    topContributor, topPct, true);
+            });
     }
 
     // ── Commit Trend ──────────────────────────────────────────────────────────
 
     public List<CommitTrendDto> getCommitTrend(UUID userId, String login, String granularity,
                                                 OffsetDateTime from, OffsetDateTime to) {
-        return analyticsDao.getCommitTrend(userId, login, granularity, from, to);
+        return cacheRepository.cached(CacheRepository.key("commit-trend", userId, login, granularity, from, to),
+            appProperties.getRedis().getAnalyticsCacheTtl(),
+            () -> analyticsDao.getCommitTrend(userId, login, granularity, from, to));
     }
 
     // ── Overview ──────────────────────────────────────────────────────────────
 
     public OverviewDto getOverview(UUID userId, String login, OffsetDateTime from, OffsetDateTime to) {
-        long commits = analyticsDao.countCommits(userId, login, from, to);
-        long prsAuthored = analyticsDao.countPRsAuthored(userId, login, from, to);
-        long reviewsGiven = analyticsDao.countReviewsGiven(userId, login, from, to);
-        Object[] lines = analyticsDao.getLinesAddedRemoved(userId, login, from, to);
-        long linesAdded = ((Number) lines[0]).longValue();
-        long linesRemoved = ((Number) lines[1]).longValue();
-        return new OverviewDto(commits, prsAuthored, reviewsGiven, linesAdded, linesRemoved);
+        return cacheRepository.cached(CacheRepository.key("overview", userId, login, from, to),
+            appProperties.getRedis().getAnalyticsCacheTtl(),
+            () -> {
+                long commits = analyticsDao.countCommits(userId, login, from, to);
+                long prsAuthored = analyticsDao.countPRsAuthored(userId, login, from, to);
+                long reviewsGiven = analyticsDao.countReviewsGiven(userId, login, from, to);
+                Object[] lines = analyticsDao.getLinesAddedRemoved(userId, login, from, to);
+                long linesAdded = ((Number) lines[0]).longValue();
+                long linesRemoved = ((Number) lines[1]).longValue();
+                return new OverviewDto(commits, prsAuthored, reviewsGiven, linesAdded, linesRemoved);
+            });
     }
 
     // ── AI Summary ────────────────────────────────────────────────────────────
@@ -484,122 +521,123 @@ public class AnalyticsService {
             return new AiSummaryDto("Connect Groq API to generate AI-powered summaries.", false);
         }
 
-        OffsetDateTime effectiveTo = to != null ? to : OffsetDateTime.now();
-        OffsetDateTime effectiveFrom = from != null ? from : effectiveTo.minusDays(30);
-        long windowDays = java.time.Duration.between(effectiveFrom, effectiveTo).toDays();
+        return cacheRepository.cached(CacheRepository.key("ai-summary", userId, login, timezone, from, to),
+            appProperties.getRedis().getAiSummaryCacheTtl(),
+            () -> {
+                OffsetDateTime effectiveTo = to != null ? to : OffsetDateTime.now();
+                OffsetDateTime effectiveFrom = from != null ? from : effectiveTo.minusDays(30);
+                long windowDays = java.time.Duration.between(effectiveFrom, effectiveTo).toDays();
 
-        long commits = analyticsDao.countCommits(userId, login, effectiveFrom, effectiveTo);
-        StreakDto streak = getStreak(userId, login, timezone);
-        PRLifecycleDto lifecycle = getPRLifecycle(userId, effectiveFrom, effectiveTo);
-        long stale = analyticsDao.countOpenStalePRsOlderThan(userId, "7");
+                long commits = analyticsDao.countCommits(userId, login, effectiveFrom, effectiveTo);
+                StreakDto streak = getStreak(userId, login, timezone);
+                PRLifecycleDto lifecycle = getPRLifecycle(userId, effectiveFrom, effectiveTo);
+                long stale = analyticsDao.countOpenStalePRsOlderThan(userId, "7");
 
-        String prompt = String.format(
-            "Developer '%s' stats (last %d days): %d commits, %d PRs merged, avg merge time %.0f hours, " +
-            "%d day streak, %d stale PRs open. " +
-            "Write a 2-3 sentence coaching summary: highlight what's going well, flag one concern if any, give one actionable tip. " +
-            "Be specific, concise, and encouraging. No bullet points. Plain text only.",
-            login, windowDays, commits, lifecycle.getMergedCount(), lifecycle.getAvgHoursToMerge(),
-            streak.getCurrentStreak(), stale);
+                String prompt = String.format(
+                    "Developer '%s' stats (last %d days): %d commits, %d PRs merged, avg merge time %.0f hours, " +
+                    "%d day streak, %d stale PRs open. " +
+                    "Write a 2-3 sentence coaching summary: highlight what's going well, flag one concern if any, give one actionable tip. " +
+                    "Be specific, concise, and encouraging. No bullet points. Plain text only.",
+                    login, windowDays, commits, lifecycle.getMergedCount(), lifecycle.getAvgHoursToMerge(),
+                    streak.getCurrentStreak(), stale);
 
-        String summary = groqApiClient.complete(
-            "You are a senior engineering coach analyzing developer productivity metrics. Be direct and human.",
-            prompt);
-
-        return summary != null
-            ? new AiSummaryDto(summary, true)
-            : new AiSummaryDto("Could not generate summary at this time.", false);
+                String summary = groqApiClient.complete(
+                    "You are a senior engineering coach analyzing developer productivity metrics. Be direct and human.",
+                    prompt);
+                return summary != null
+                    ? new AiSummaryDto(summary, true)
+                    : new AiSummaryDto("Could not generate summary at this time.", false);
+            });
     }
 
     // ── Activity Feed ─────────────────────────────────────────────────────────
 
     public List<ActivityEvent> getActivityFeed(UUID userId, int limit) {
-        User user = userDao.findById(userId)
-            .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-        String login = user.getUsername();
+        return cacheRepository.cached(CacheRepository.key("feed", userId, limit),
+            appProperties.getRedis().getFeedCacheTtl(),
+            () -> {
+                User user = userDao.findById(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                String login = user.getUsername();
+                int half = Math.max(1, limit / 2);
 
-        int half = Math.max(1, limit / 2);
+                List<Commit> commits = commitDao.findRecentByUser(userId, login, half);
+                List<PullRequest> prs = pullRequestDao.findRecentByUser(userId, login, half);
 
-        List<Commit> commits = commitDao.findRecentByUser(userId, login, half);
-        List<PullRequest> prs = pullRequestDao.findRecentByUser(userId, login, half);
-
-        List<ActivityEvent> events = new ArrayList<>();
-
-        for (Commit c : commits) {
-            events.add(ActivityEvent.builder()
-                .type("COMMIT")
-                .title(c.getMessageSummary())
-                .repoFullName(c.getRepo().getFullName())
-                .sha(c.getSha())
-                .prNumber(null)
-                .state(null)
-                .linesAdded(c.getAdditions())
-                .linesRemoved(c.getDeletions())
-                .occurredAt(c.getCommittedAt().toString())
-                .build());
-        }
-
-        for (PullRequest pr : prs) {
-            String type = switch (pr.getState()) {
-                case MERGED -> "PR_MERGED";
-                case CLOSED -> "PR_CLOSED";
-                default -> "PR_OPENED";
-            };
-            events.add(ActivityEvent.builder()
-                .type(type)
-                .title(pr.getTitle())
-                .repoFullName(pr.getRepo().getFullName())
-                .sha(null)
-                .prNumber(pr.getPrNumber())
-                .state(pr.getState().name())
-                .linesAdded(null)
-                .linesRemoved(null)
-                .occurredAt(pr.getCreatedAt().toString())
-                .build());
-        }
-
-        events.sort(Comparator.comparing(ActivityEvent::getOccurredAt).reversed());
-        return events.stream().limit(limit).toList();
+                List<ActivityEvent> events = new ArrayList<>();
+                for (Commit c : commits) {
+                    events.add(ActivityEvent.builder()
+                        .type("COMMIT").title(c.getMessageSummary())
+                        .repoFullName(c.getRepo().getFullName()).sha(c.getSha())
+                        .prNumber(null).state(null)
+                        .linesAdded(c.getAdditions()).linesRemoved(c.getDeletions())
+                        .occurredAt(c.getCommittedAt().toString()).build());
+                }
+                for (PullRequest pr : prs) {
+                    String type = switch (pr.getState()) {
+                        case MERGED -> "PR_MERGED"; case CLOSED -> "PR_CLOSED"; default -> "PR_OPENED";
+                    };
+                    events.add(ActivityEvent.builder()
+                        .type(type).title(pr.getTitle())
+                        .repoFullName(pr.getRepo().getFullName()).sha(null)
+                        .prNumber(pr.getPrNumber()).state(pr.getState().name())
+                        .linesAdded(null).linesRemoved(null)
+                        .occurredAt(pr.getCreatedAt().toString()).build());
+                }
+                events.sort(Comparator.comparing(ActivityEvent::getOccurredAt).reversed());
+                return events.stream().limit(limit).toList();
+            });
     }
 
     // ── Churn Leaderboard ─────────────────────────────────────────────────────
 
     public List<ContributorStatsDto> getChurnLeaderboard(UUID userId, UUID repoId,
                                                           OffsetDateTime from, OffsetDateTime to) {
-        return analyticsDao.getChurnLeaderboard(userId, repoId, from, to);
+        return cacheRepository.cached(CacheRepository.key("churn", userId, repoId, from, to),
+            appProperties.getRedis().getAnalyticsCacheTtl(),
+            () -> analyticsDao.getChurnLeaderboard(userId, repoId, from, to));
     }
 
     // ── PR Merge Rate Trend ───────────────────────────────────────────────────
 
     public List<PRMergeRateDto> getPRMergeRateTrend(UUID userId, String login,
                                                      OffsetDateTime from, OffsetDateTime to) {
-        return analyticsDao.getPRMergeRateTrend(userId, login, from, to);
+        return cacheRepository.cached(CacheRepository.key("pr-merge-rate", userId, login, from, to),
+            appProperties.getRedis().getAnalyticsCacheTtl(),
+            () -> analyticsDao.getPRMergeRateTrend(userId, login, from, to));
     }
 
     // ── Reviewer Coverage ─────────────────────────────────────────────────────
 
     public ReviewerCoverageDto getReviewerCoverage(UUID userId, String login,
                                                     OffsetDateTime from, OffsetDateTime to) {
-        Object[] row = analyticsDao.getReviewerCoverageForUser(userId, login, from, to);
-        long totalPRs = row[0] != null ? ((Number) row[0]).longValue() : 0;
-        long reviewedPRs = row[1] != null ? ((Number) row[1]).longValue() : 0;
-        double pct = totalPRs > 0 ? (double) reviewedPRs / totalPRs * 100 : 0;
-        return new ReviewerCoverageDto(totalPRs, reviewedPRs, pct);
+        return cacheRepository.cached(CacheRepository.key("reviewer-cov", userId, login, from, to),
+            appProperties.getRedis().getAnalyticsCacheTtl(),
+            () -> {
+                Object[] row = analyticsDao.getReviewerCoverageForUser(userId, login, from, to);
+                long totalPRs = row[0] != null ? ((Number) row[0]).longValue() : 0;
+                long reviewedPRs = row[1] != null ? ((Number) row[1]).longValue() : 0;
+                double pct = totalPRs > 0 ? (double) reviewedPRs / totalPRs * 100 : 0;
+                return new ReviewerCoverageDto(totalPRs, reviewedPRs, pct);
+            });
     }
 
     // ── Collaboration ─────────────────────────────────────────────────────────
 
     public CollaborationDto getCollaboration(UUID userId, String login, OffsetDateTime from, OffsetDateTime to) {
-        List<CollaborationDto.CollaboratorEntry> reviewersOfMe = analyticsDao
-            .getTopReviewersOfMyPRs(userId, login, from, to).stream()
-            .map(r -> new CollaborationDto.CollaboratorEntry((String) r[0], ((Number) r[1]).longValue()))
-            .toList();
-
-        List<CollaborationDto.CollaboratorEntry> iReviewFor = analyticsDao
-            .getTopPeopleIReview(userId, login, from, to).stream()
-            .map(r -> new CollaborationDto.CollaboratorEntry((String) r[0], ((Number) r[1]).longValue()))
-            .toList();
-
-        return new CollaborationDto(reviewersOfMe, iReviewFor);
+        return cacheRepository.cached(CacheRepository.key("collab", userId, login, from, to),
+            appProperties.getRedis().getAnalyticsCacheTtl(),
+            () -> {
+                List<CollaborationDto.CollaboratorEntry> reviewersOfMe = analyticsDao
+                    .getTopReviewersOfMyPRs(userId, login, from, to).stream()
+                    .map(r -> new CollaborationDto.CollaboratorEntry((String) r[0], ((Number) r[1]).longValue()))
+                    .toList();
+                List<CollaborationDto.CollaboratorEntry> iReviewFor = analyticsDao
+                    .getTopPeopleIReview(userId, login, from, to).stream()
+                    .map(r -> new CollaborationDto.CollaboratorEntry((String) r[0], ((Number) r[1]).longValue()))
+                    .toList();
+                return new CollaborationDto(reviewersOfMe, iReviewFor);
+            });
     }
 
     // ── Repo Commit Trend ─────────────────────────────────────────────────────
@@ -608,7 +646,9 @@ public class AnalyticsService {
         trackedRepoDao.findById(repoId)
             .filter(r -> r.getUser().getId().equals(userId))
             .orElseThrow(() -> new ResourceNotFoundException("Repository not found"));
-        return analyticsDao.getCommitTrendByRepo(repoId, from, to);
+        return cacheRepository.cached(CacheRepository.key("repo-commit-trend", repoId, from, to),
+            appProperties.getRedis().getAnalyticsCacheTtl(),
+            () -> analyticsDao.getCommitTrendByRepo(repoId, from, to));
     }
 
     // ── Stars & Forks Trend ───────────────────────────────────────────────────
@@ -617,7 +657,9 @@ public class AnalyticsService {
         trackedRepoDao.findById(repoId)
             .filter(r -> r.getUser().getId().equals(userId))
             .orElseThrow(() -> new ResourceNotFoundException("Repository not found"));
-        return analyticsDao.getStarsForksTrend(repoId);
+        return cacheRepository.cached(CacheRepository.key("stars-forks", repoId),
+            appProperties.getRedis().getAnalyticsCacheTtl(),
+            () -> analyticsDao.getStarsForksTrend(repoId));
     }
 
     // ── Release Trend ─────────────────────────────────────────────────────────
@@ -626,7 +668,9 @@ public class AnalyticsService {
         trackedRepoDao.findById(repoId)
             .filter(r -> r.getUser().getId().equals(userId))
             .orElseThrow(() -> new ResourceNotFoundException("Repository not found"));
-        return analyticsDao.getReleaseTrend(repoId);
+        return cacheRepository.cached(CacheRepository.key("release-trend", repoId),
+            appProperties.getRedis().getAnalyticsCacheTtl(),
+            () -> analyticsDao.getReleaseTrend(repoId));
     }
 
     // ── Issue Analytics ───────────────────────────────────────────────────────
@@ -635,7 +679,9 @@ public class AnalyticsService {
         trackedRepoDao.findById(repoId)
             .filter(r -> r.getUser().getId().equals(userId))
             .orElseThrow(() -> new ResourceNotFoundException("Repository not found"));
-        return analyticsDao.getIssueAnalytics(repoId);
+        return cacheRepository.cached(CacheRepository.key("issues", repoId),
+            appProperties.getRedis().getAnalyticsCacheTtl(),
+            () -> analyticsDao.getIssueAnalytics(repoId));
     }
 
     // ── Language Bytes ────────────────────────────────────────────────────────
@@ -644,12 +690,21 @@ public class AnalyticsService {
         trackedRepoDao.findById(repoId)
             .filter(r -> r.getUser().getId().equals(userId))
             .orElseThrow(() -> new ResourceNotFoundException("Repository not found"));
-        return analyticsDao.getLanguageBytes(repoId);
+        return cacheRepository.cached(CacheRepository.key("lang-bytes", repoId),
+            appProperties.getRedis().getAnalyticsCacheTtl(),
+            () -> analyticsDao.getLanguageBytes(repoId));
     }
 
     // ── Compare Two Repos ─────────────────────────────────────────────────────
 
     public List<RepoCompareDto> compareRepos(UUID userId, List<UUID> repoIds) {
+        List<UUID> sortedIds = repoIds.stream().sorted().toList();
+        return cacheRepository.cached(CacheRepository.key("cmp-repos", userId, sortedIds),
+            appProperties.getRedis().getAnalyticsCacheTtl(),
+            () -> computeCompareRepos(userId, repoIds));
+    }
+
+    private List<RepoCompareDto> computeCompareRepos(UUID userId, List<UUID> repoIds) {
         return repoIds.stream().map(repoId -> {
             var repo = trackedRepoDao.findById(repoId)
                 .filter(r -> r.getUser().getId().equals(userId))
@@ -683,14 +738,21 @@ public class AnalyticsService {
     // ── Compare Two Contributors ──────────────────────────────────────────────
 
     public List<ContributorCompareDto> compareContributors(UUID userId, List<String> logins) {
-        return logins.stream()
-            .map(login -> analyticsDao.getContributorStats(userId, login))
-            .toList();
+        List<String> sortedLogins = logins.stream().sorted().toList();
+        return cacheRepository.cached(CacheRepository.key("cmp-contributors", userId, sortedLogins),
+            appProperties.getRedis().getAnalyticsCacheTtl(),
+            () -> logins.stream().map(login -> analyticsDao.getContributorStats(userId, login)).toList());
     }
 
     // ── Review Queue ───────────────────────────────────────────────────────────
 
     public List<ReviewQueueItem> getReviewQueue(UUID userId) {
+        return cacheRepository.cached(CacheRepository.key("review-queue", userId),
+            appProperties.getRedis().getFeedCacheTtl(),
+            () -> computeReviewQueue(userId));
+    }
+
+    private List<ReviewQueueItem> computeReviewQueue(UUID userId) {
         User user = userDao.findById(userId)
             .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         String login = user.getUsername();

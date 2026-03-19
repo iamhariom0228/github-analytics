@@ -62,6 +62,8 @@ app:
 
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+  cookie-secure: ${COOKIE_SECURE:true}
+  frontend-url: ${FRONTEND_URL:http://localhost:3000}
 
   redis:
     dashboard-cache-ttl: 300        # 5 min
@@ -69,6 +71,9 @@ app:
     rate-limit-ttl: 3600            # 1 hr
     sync-lock-ttl: 1800             # 30 min — extended to prevent lock expiry on large repo syncs
     streak-cache-ttl: 3600          # 1 hr
+    analytics-cache-ttl: 3600       # 1 hr — synced data (heatmap, overview, trends, etc.)
+    ai-summary-cache-ttl: 21600     # 6 hr — expensive Groq API calls
+    feed-cache-ttl: 900             # 15 min — near-live data (activity feed, review queue, stale PRs)
 
 management:
   endpoints:

@@ -53,56 +53,61 @@ export default function SettingsPage() {
             <div className="text-xs text-muted-foreground">Receive a summary every week</div>
           </div>
           <button
+            role="switch"
+            aria-checked={form.digestEnabled}
             onClick={() => setForm((f) => ({ ...f, digestEnabled: !f.digestEnabled }))}
-            className={`relative w-11 h-6 rounded-full transition-colors ${
-              form.digestEnabled ? "bg-primary" : "bg-muted"
+            className={`relative w-11 h-6 rounded-full transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+              form.digestEnabled ? "bg-primary" : "bg-slate-300 dark:bg-slate-600"
             }`}
           >
             <span
-              className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${
-                form.digestEnabled ? "translate-x-6" : "translate-x-1"
+              className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${
+                form.digestEnabled ? "translate-x-5" : "translate-x-0"
               }`}
             />
           </button>
         </div>
 
-        {/* Day */}
-        <div className="space-y-1">
-          <label className="text-sm font-medium">Send on</label>
-          <select
-            value={form.digestDayOfWeek}
-            onChange={(e) => setForm((f) => ({ ...f, digestDayOfWeek: Number(e.target.value) }))}
-            className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
-          >
-            {DAYS.map((d, i) => (
-              <option key={d} value={i}>{d}</option>
-            ))}
-          </select>
-        </div>
+        {/* Day / Hour / Timezone — disabled when digest is off */}
+        <div className={`space-y-4 transition-opacity ${!form.digestEnabled ? "opacity-40 pointer-events-none" : ""}`}>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Send on</label>
+            <select
+              value={form.digestDayOfWeek}
+              onChange={(e) => setForm((f) => ({ ...f, digestDayOfWeek: Number(e.target.value) }))}
+              disabled={!form.digestEnabled}
+              className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
+            >
+              {DAYS.map((d, i) => (
+                <option key={d} value={i}>{d}</option>
+              ))}
+            </select>
+          </div>
 
-        {/* Hour */}
-        <div className="space-y-1">
-          <label className="text-sm font-medium">At hour (0-23)</label>
-          <input
-            type="number"
-            min={0}
-            max={23}
-            value={form.digestHour}
-            onChange={(e) => setForm((f) => ({ ...f, digestHour: Number(e.target.value) }))}
-            className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
-          />
-        </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">At hour (0–23)</label>
+            <input
+              type="number"
+              min={0}
+              max={23}
+              value={form.digestHour}
+              disabled={!form.digestEnabled}
+              onChange={(e) => setForm((f) => ({ ...f, digestHour: Number(e.target.value) }))}
+              className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
+            />
+          </div>
 
-        {/* Timezone */}
-        <div className="space-y-1">
-          <label className="text-sm font-medium">Timezone</label>
-          <input
-            type="text"
-            value={form.timezone}
-            onChange={(e) => setForm((f) => ({ ...f, timezone: e.target.value }))}
-            placeholder="e.g. Asia/Kolkata"
-            className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
-          />
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Timezone</label>
+            <input
+              type="text"
+              value={form.timezone}
+              disabled={!form.digestEnabled}
+              onChange={(e) => setForm((f) => ({ ...f, timezone: e.target.value }))}
+              placeholder="e.g. Asia/Kolkata"
+              className="w-full border border-input rounded-md px-3 py-2 text-sm bg-background"
+            />
+          </div>
         </div>
 
         <div className="flex gap-3">
@@ -115,7 +120,7 @@ export default function SettingsPage() {
           </button>
           <button
             onClick={() => previewMutation.mutate()}
-            disabled={previewMutation.isPending}
+            disabled={previewMutation.isPending || !form.digestEnabled}
             className="border border-border px-4 py-2 rounded-md text-sm hover:bg-muted disabled:opacity-50"
           >
             {previewMutation.isPending ? "Sending..." : "Send preview now"}

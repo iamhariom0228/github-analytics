@@ -14,6 +14,8 @@ public class AppProperties {
     private Encryption encryption = new Encryption();
     private Cors cors = new Cors();
     private Redis redis = new Redis();
+    private boolean cookieSecure = true;
+    private String frontendUrl = "http://localhost:3000";
 
     @Data
     public static class Jwt {
@@ -48,5 +50,8 @@ public class AppProperties {
         private long rateLimitTtl;
         private long syncLockTtl;
         private long streakCacheTtl;
+        private long analyticsCacheTtl;
+        private long aiSummaryCacheTtl;
+        private long feedCacheTtl;
     }
 }

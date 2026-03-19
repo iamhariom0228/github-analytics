@@ -1,5 +1,8 @@
 package com.gitanalytics.digest.service;
 
+import com.gitanalytics.analytics.dto.CommitTrendDto;
+import com.gitanalytics.analytics.dto.OverviewDto;
+import com.gitanalytics.analytics.dto.ReviewQueueItem;
 import com.gitanalytics.analytics.service.AnalyticsService;
 import com.gitanalytics.auth.entity.User;
 import com.gitanalytics.auth.dao.UserDao;
@@ -78,9 +81,22 @@ public class DigestService {
         var lifecycle = analyticsService.getPRLifecycle(userId, from, to);
         var aiSummary = analyticsService.getAiSummary(userId, user.getUsername(), tz, from, to);
 
+        // Commit sparkline: daily counts for the week
+        List<CommitTrendDto> trend = analyticsService.getCommitTrend(userId, user.getUsername(), "daily", from, to);
+        List<Long> sparkline = trend.stream().map(CommitTrendDto::count).toList();
+
+        // Top 3 PRs awaiting review
+        List<ReviewQueueItem> reviewQueue = analyticsService.getReviewQueue(userId).stream().limit(3).toList();
+
+        // Month-to-date overview for goal progress
+        OffsetDateTime monthStart = weekStart.withDayOfMonth(1).atStartOfDay().atOffset(ZoneOffset.UTC);
+        OffsetDateTime monthEnd = monthStart.plusMonths(1);
+        OverviewDto monthOverview = analyticsService.getOverview(userId, user.getUsername(), monthStart, monthEnd);
+
         emailService.sendDigestEmail(user.getEmail(), user.getUsername(), weekStart,
             streak.getCurrentStreak(), lifecycle.getMergedCount(), lifecycle.getAvgHoursToMerge(),
-            aiSummary.aiPowered() ? aiSummary.summary() : null);
+            aiSummary.aiPowered() ? aiSummary.summary() : null,
+            sparkline, reviewQueue, monthOverview);
 
         if (!preview) {
             digestLogRepository.save(DigestLog.builder()

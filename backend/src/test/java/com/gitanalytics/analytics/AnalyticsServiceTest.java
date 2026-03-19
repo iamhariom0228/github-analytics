@@ -10,7 +10,9 @@ import com.gitanalytics.ingestion.dao.PullRequestDao;
 import com.gitanalytics.ingestion.dao.ReleaseDao;
 import com.gitanalytics.ingestion.dao.TrackedRepoDao;
 import com.gitanalytics.ingestion.entity.PullRequest;
+import com.gitanalytics.shared.cache.CacheRepository;
 import com.gitanalytics.shared.client.GroqApiClient;
+import com.gitanalytics.shared.config.AppProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,11 +20,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
 
 import java.time.OffsetDateTime;
 import java.util.*;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
@@ -38,16 +39,28 @@ class AnalyticsServiceTest {
     @Mock private PullRequestDao pullRequestDao;
     @Mock private ReleaseDao releaseDao;
     @Mock private TrackedRepoDao trackedRepoDao;
-    @Mock private RedisTemplate<String, Object> redisTemplate;
-    @Mock private ValueOperations<String, Object> valueOps;
+    @Mock private CacheRepository cacheRepository;
     @Mock private GroqApiClient groqApiClient;
+    @Mock private AppProperties appProperties;
 
     private AnalyticsService service;
 
     @BeforeEach
     void setUp() {
-        when(redisTemplate.opsForValue()).thenReturn(valueOps);
-        service = new AnalyticsService(analyticsDao, userDao, commitDao, pullRequestDao, releaseDao, trackedRepoDao, redisTemplate, groqApiClient);
+        // Make cacheRepository.cached() a pass-through: always call the loader (no caching in tests)
+        when(cacheRepository.cached(anyString(), anyLong(), any()))
+            .thenAnswer(inv -> ((Supplier<?>) inv.getArgument(2)).get());
+
+        AppProperties.Redis redisCfg = new AppProperties.Redis();
+        redisCfg.setAnalyticsCacheTtl(3600);
+        redisCfg.setAiSummaryCacheTtl(21600);
+        redisCfg.setFeedCacheTtl(900);
+        redisCfg.setStreakCacheTtl(3600);
+        redisCfg.setDashboardCacheTtl(300);
+        when(appProperties.getRedis()).thenReturn(redisCfg);
+
+        service = new AnalyticsService(analyticsDao, userDao, commitDao, pullRequestDao,
+            releaseDao, trackedRepoDao, cacheRepository, groqApiClient, appProperties);
     }
 
     // ---------- PR Size Distribution ----------
@@ -133,17 +146,17 @@ class AnalyticsServiceTest {
     // ---------- Dashboard Cache ----------
 
     @Test
-    void getDashboard_returnsCachedValueWithoutHittingDb() {
+    void getDashboard_usesCacheRepositoryWithCorrectKey() {
         UUID userId = UUID.randomUUID();
-        DashboardSummaryDto cached = DashboardSummaryDto.builder()
-            .weeklyCommits(42L).currentStreak(7).build();
-        when(valueOps.get("ga:dashboard:" + userId)).thenReturn(cached);
+        User user = user();
+        when(userDao.findById(userId)).thenReturn(Optional.of(user));
+        when(pullRequestDao.findByUserAndAuthorAndDateRange(any(), any(), any(), any())).thenReturn(List.of());
+        when(analyticsDao.countCommits(any(), any(), any(), any())).thenReturn(0L);
+        when(analyticsDao.getStreakData(any(), any(), any())).thenThrow(new RuntimeException("no data"));
 
-        DashboardSummaryDto result = service.getDashboard(userId);
+        service.getDashboard(userId);
 
-        assertThat(result.getWeeklyCommits()).isEqualTo(42L);
-        assertThat(result.getCurrentStreak()).isEqualTo(7);
-        verifyNoInteractions(userDao);
+        verify(cacheRepository).cached(eq("ga:dashboard:" + userId), anyLong(), any());
     }
 
     // ---------- Stale PRs ----------

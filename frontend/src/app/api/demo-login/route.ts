@@ -30,7 +30,7 @@ export async function GET() {
     if (refreshToken) {
       response.cookies.set("refresh_token", refreshToken, {
         httpOnly: true,
-        path: "/api/auth/refresh",
+        path: "/",
         maxAge: 30 * 24 * 60 * 60,
         sameSite: "lax",
       });

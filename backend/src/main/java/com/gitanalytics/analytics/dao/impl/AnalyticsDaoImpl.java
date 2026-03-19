@@ -17,6 +17,10 @@ public class AnalyticsDaoImpl implements AnalyticsDao {
 
     private final AnalyticsRepository analyticsRepository;
 
+    private static int toInt(Object v)    { return v == null ? 0 : ((Number) v).intValue(); }
+    private static long toLong(Object v)   { return v == null ? 0L : ((Number) v).longValue(); }
+    private static double toDouble(Object v) { return v == null ? 0.0 : ((Number) v).doubleValue(); }
+
     // ── Heatmap ──────────────────────────────────────────────────────────────
 
     @Override
@@ -27,10 +31,7 @@ public class AnalyticsDaoImpl implements AnalyticsDao {
                 ? analyticsRepository.getCommitHeatmapByRepo(userId, tz, repoId, from, to)
                 : analyticsRepository.getCommitHeatmap(userId, tz, from, to);
         return rows.stream()
-                .map(r -> new HeatmapCellDto(
-                        ((Number) r[0]).intValue(),
-                        ((Number) r[1]).intValue(),
-                        ((Number) r[2]).intValue()))
+                .map(r -> new HeatmapCellDto(toInt(r[0]), toInt(r[1]), toInt(r[2])))
                 .toList();
     }
 
@@ -119,7 +120,7 @@ public class AnalyticsDaoImpl implements AnalyticsDao {
                         date = inst.atOffset(ZoneOffset.UTC).toLocalDate().toString();
                     else
                         date = r[0].toString().substring(0, 10);
-                    return new CommitTrendDto(date, ((Number) r[1]).longValue());
+                    return new CommitTrendDto(date, toLong(r[1]));
                 })
                 .toList();
     }
@@ -240,8 +241,8 @@ public class AnalyticsDaoImpl implements AnalyticsDao {
                                                     OffsetDateTime from, OffsetDateTime to) {
         return analyticsRepository.getPRMergeRateTrend(userId, login, from, to).stream()
                 .map(r -> {
-                    long total = ((Number) r[1]).longValue();
-                    long merged = ((Number) r[2]).longValue();
+                    long total = toLong(r[1]);
+                    long merged = toLong(r[2]);
                     double rate = total > 0 ? (double) merged / total * 100 : 0;
                     return new PRMergeRateDto((String) r[0], total, merged, rate);
                 })
@@ -281,7 +282,7 @@ public class AnalyticsDaoImpl implements AnalyticsDao {
                         date = inst.atOffset(ZoneOffset.UTC).toLocalDate().toString();
                     else
                         date = r[0].toString().substring(0, 10);
-                    return new CommitTrendDto(date, ((Number) r[1]).longValue());
+                    return new CommitTrendDto(date, toLong(r[1]));
                 })
                 .toList();
     }
@@ -292,10 +293,7 @@ public class AnalyticsDaoImpl implements AnalyticsDao {
     public List<StarsForksSnapshotDto> getStarsForksTrend(UUID repoId) {
         return analyticsRepository.getStarsForksTrend(repoId).stream()
                 .map(r -> new StarsForksSnapshotDto(
-                        (String) r[0],
-                        ((Number) r[1]).intValue(),
-                        ((Number) r[2]).intValue(),
-                        ((Number) r[3]).intValue()))
+                        (String) r[0], toInt(r[1]), toInt(r[2]), toInt(r[3])))
                 .toList();
     }
 
@@ -304,9 +302,7 @@ public class AnalyticsDaoImpl implements AnalyticsDao {
     @Override
     public List<ReleaseTrendDto> getReleaseTrend(UUID repoId) {
         return analyticsRepository.getReleaseTrend(repoId).stream()
-                .map(r -> new ReleaseTrendDto(
-                        (String) r[0],
-                        ((Number) r[1]).longValue()))
+                .map(r -> new ReleaseTrendDto((String) r[0], toLong(r[1])))
                 .toList();
     }
 
@@ -332,7 +328,7 @@ public class AnalyticsDaoImpl implements AnalyticsDao {
     @Override
     public List<RepoLanguageDto> getLanguageBytes(UUID repoId) {
         return analyticsRepository.getLanguageBytes(repoId).stream()
-                .map(r -> new RepoLanguageDto((String) r[0], ((Number) r[1]).longValue()))
+                .map(r -> new RepoLanguageDto((String) r[0], toLong(r[1])))
                 .toList();
     }
 

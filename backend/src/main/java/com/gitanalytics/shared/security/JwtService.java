@@ -15,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.security.MessageDigest;
 
 @Slf4j
 @Service
@@ -46,9 +47,43 @@ public class JwtService {
     public boolean isTokenValid(String token) {
         try {
             Claims claims = parseToken(token);
-            return !claims.getExpiration().before(new Date());
+            if (claims.getExpiration().before(new Date())) return false;
+            try {
+                String hash = sha256hex(token);
+                if (Boolean.TRUE.equals(redisTemplate.hasKey("ga:token:revoked:" + hash))) return false;
+            } catch (Exception e) {
+                log.warn("Redis revocation check failed (fail-closed): {}", e.getMessage());
+                return false;
+            }
+            return true;
         } catch (JwtException | IllegalArgumentException e) {
             return false;
+        }
+    }
+
+    public void revokeToken(String token) {
+        try {
+            Claims claims = parseToken(token);
+            long ttlMs = claims.getExpiration().getTime() - System.currentTimeMillis();
+            if (ttlMs > 0) {
+                String hash = sha256hex(token);
+                redisTemplate.opsForValue().set(
+                    "ga:token:revoked:" + hash, "1", ttlMs, TimeUnit.MILLISECONDS);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to revoke access token: {}", e.getMessage());
+        }
+    }
+
+    private String sha256hex(String input) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(input.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hash) sb.append(String.format("%02x", b));
+            return sb.toString();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 

@@ -8,8 +8,6 @@ FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8080
-ENTRYPOINT ["java", \
-  "-Xms64m", "-Xmx200m", \
-  "-XX:+UseSerialGC", \
-  "-Djava.security.egd=file:/dev/./urandom", \
-  "-jar", "app.jar"]
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD wget -qO- http://localhost:8080/api/v1/actuator/health || exit 1
+ENTRYPOINT ["java", "-jar", "app.jar"]

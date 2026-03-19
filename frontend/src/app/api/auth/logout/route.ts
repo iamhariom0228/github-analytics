@@ -20,7 +20,7 @@ export async function POST() {
     await fetch(`${backendUrl}/api/v1/auth/logout`, {
       method: "POST",
       headers: { Cookie: cookieHeader },
-    }).catch(() => {});
+    }).catch((err) => { console.error("[logout] backend revocation failed:", err); });
   }
 
   const response = NextResponse.json({ success: true });
