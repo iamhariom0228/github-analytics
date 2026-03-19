@@ -1,7 +1,4 @@
 spring:
-  kafka:
-    consumer:
-      auto-startup: false
   flyway:
     enabled: true
   jpa:
@@ -18,7 +15,7 @@ app:
     redirect-uri: http://localhost:8080/api/v1/auth/github/callback
     webhook-secret: test-webhook-secret
   encryption:
-    key: test-32-byte-key-for-aes-gcmXX
+    key: test-32-byte-key-for-aes-gcmXXYZ
   cors:
     allowed-origins: http://localhost:3000
   redis:

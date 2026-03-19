@@ -11,24 +11,21 @@ import com.gitanalytics.ingestion.repository.*;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
 
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.when;
 
 @Testcontainers
 @SpringBootTest
@@ -42,19 +39,20 @@ class AnalyticsIntegrationTest {
         .withUsername("test")
         .withPassword("test");
 
+    @Container
+    @SuppressWarnings("resource")
+    static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:7-alpine"))
+        .withExposedPorts(6379);
+
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
         registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
+        registry.add("spring.data.redis.host", redis::getHost);
+        registry.add("spring.data.redis.port", () -> redis.getMappedPort(6379));
     }
-
-    @MockBean
-    private RedisTemplate<String, Object> redisTemplate;
-
-    @MockBean
-    private ValueOperations<String, Object> valueOperations;
 
     @Autowired private AnalyticsService analyticsService;
     @Autowired private UserRepository userRepository;
@@ -67,11 +65,6 @@ class AnalyticsIntegrationTest {
     private static UUID userId;
     private static UUID repoId;
 
-    @BeforeEach
-    void mockRedis() {
-        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
-        when(valueOperations.get(anyString())).thenReturn(null);
-    }
 
     @Test
     @Order(1)
@@ -97,8 +90,8 @@ class AnalyticsIntegrationTest {
             .build());
         repoId = repo.getId();
 
-        // Seed commits across different hours/days for heatmap
-        OffsetDateTime base = OffsetDateTime.now();
+        // Seed commits across different hours/days for heatmap — use UTC to align with heatmap query
+        OffsetDateTime base = OffsetDateTime.now(ZoneOffset.UTC);
         commitRepository.saveAll(List.of(
             commit(repo, "test-user", base.minusDays(1).withHour(9), 10, 5),
             commit(repo, "test-user", base.minusDays(1).withHour(14), 20, 3),
@@ -215,7 +208,7 @@ class AnalyticsIntegrationTest {
     private Commit commit(TrackedRepo repo, String login, OffsetDateTime when, int add, int del) {
         return Commit.builder()
             .repo(repo)
-            .sha(UUID.randomUUID().toString().replace("-", "").substring(0, 40))
+            .sha(UUID.randomUUID().toString().replace("-", "") + "00000000")
             .authorLogin(login)
             .authorGithubId(login.equals("test-user") ? 88_888L : 11_111L)
             .messageSummary("test commit")
