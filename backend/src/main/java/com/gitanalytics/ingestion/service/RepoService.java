@@ -14,7 +14,7 @@ import com.gitanalytics.ingestion.entity.TrackedRepo;
 import com.gitanalytics.shared.config.AppProperties;
 import com.gitanalytics.shared.exception.ResourceNotFoundException;
 import com.gitanalytics.shared.exception.UnauthorizedException;
-import com.gitanalytics.shared.kafka.events.SyncRequestedEvent;
+import com.gitanalytics.shared.events.SyncRequestedEvent;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

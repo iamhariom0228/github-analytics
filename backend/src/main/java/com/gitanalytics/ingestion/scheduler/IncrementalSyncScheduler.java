@@ -4,7 +4,7 @@ import com.gitanalytics.ingestion.dao.SyncJobDao;
 import com.gitanalytics.ingestion.dao.TrackedRepoDao;
 import com.gitanalytics.ingestion.entity.SyncJob;
 import com.gitanalytics.ingestion.entity.TrackedRepo;
-import com.gitanalytics.shared.kafka.events.SyncRequestedEvent;
+import com.gitanalytics.shared.events.SyncRequestedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;

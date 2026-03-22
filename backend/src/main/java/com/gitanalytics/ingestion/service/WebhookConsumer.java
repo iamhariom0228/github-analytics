@@ -1,4 +1,4 @@
-package com.gitanalytics.ingestion.kafka;
+package com.gitanalytics.ingestion.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -10,8 +10,8 @@ import com.gitanalytics.ingestion.entity.PullRequest;
 import com.gitanalytics.ingestion.entity.PrReview;
 import com.gitanalytics.ingestion.entity.SyncJob;
 import com.gitanalytics.ingestion.entity.TrackedRepo;
-import com.gitanalytics.shared.kafka.events.SyncRequestedEvent;
-import com.gitanalytics.shared.kafka.events.WebhookReceivedEvent;
+import com.gitanalytics.shared.events.SyncRequestedEvent;
+import com.gitanalytics.shared.events.WebhookReceivedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -22,7 +22,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.List;
 import java.util.UUID;
 
 @Slf4j

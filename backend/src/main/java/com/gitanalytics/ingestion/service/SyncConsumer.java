@@ -1,4 +1,4 @@
-package com.gitanalytics.ingestion.kafka;
+package com.gitanalytics.ingestion.service;
 
 import com.gitanalytics.auth.dao.UserDao;
 import com.gitanalytics.auth.entity.User;
@@ -9,7 +9,7 @@ import com.gitanalytics.ingestion.entity.*;
 import com.gitanalytics.ingestion.repository.RepoLanguageRepository;
 import com.gitanalytics.ingestion.repository.RepoStatsSnapshotRepository;
 import com.gitanalytics.shared.exception.GitHubApiException;
-import com.gitanalytics.shared.kafka.events.SyncRequestedEvent;
+import com.gitanalytics.shared.events.SyncRequestedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;

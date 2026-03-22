@@ -1,4 +1,4 @@
-package com.gitanalytics.shared.kafka.events;
+package com.gitanalytics.shared.events;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
