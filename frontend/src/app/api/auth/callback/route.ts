@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL("/?error=auth_failed", request.url));
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
   const response = NextResponse.redirect(new URL("/dashboard", appUrl));
 
   response.cookies.set("jwt", token, {

@@ -53,7 +53,8 @@ public class AuthController {
         // Pass tokens to the Next.js callback route which sets the cookie on the
         // frontend domain. Cookies set here (backend domain) would be silently
         // dropped by the browser when it follows the redirect to Vercel.
-        String redirectUrl = appProperties.getFrontendUrl()
+        String frontendUrl = appProperties.getFrontendUrl().replaceAll("/+$", "");
+        String redirectUrl = frontendUrl
             + "/api/auth/callback?token=" + accessToken
             + "&refresh=" + refreshToken;
         response.sendRedirect(redirectUrl);
