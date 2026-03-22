@@ -50,21 +50,13 @@ public class AuthController {
         String accessToken = jwtService.generateToken(user.getId(), user.getUsername());
         String refreshToken = jwtService.generateRefreshToken(user.getId());
 
-        boolean secure = appProperties.isCookieSecure();
-
-        ResponseCookie jwtCookie = ResponseCookie.from("jwt", accessToken)
-            .httpOnly(true).secure(secure).path("/")
-            .sameSite("Lax").maxAge(Duration.ofMinutes(15))
-            .build();
-        ResponseCookie refreshCookie = ResponseCookie.from("refresh_token", refreshToken)
-            .httpOnly(true).secure(secure).path("/api/v1/auth/refresh")
-            .sameSite("Lax").maxAge(Duration.ofDays(30))
-            .build();
-        response.addHeader(HttpHeaders.SET_COOKIE, jwtCookie.toString());
-        response.addHeader(HttpHeaders.SET_COOKIE, refreshCookie.toString());
-
-        // Redirect to frontend dashboard
-        response.sendRedirect(appProperties.getFrontendUrl() + "/dashboard");
+        // Pass tokens to the Next.js callback route which sets the cookie on the
+        // frontend domain. Cookies set here (backend domain) would be silently
+        // dropped by the browser when it follows the redirect to Vercel.
+        String redirectUrl = appProperties.getFrontendUrl()
+            + "/api/auth/callback?token=" + accessToken
+            + "&refresh=" + refreshToken;
+        response.sendRedirect(redirectUrl);
     }
 
     @PostMapping("/logout")
