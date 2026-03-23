@@ -101,7 +101,7 @@ export function LanguageDistribution({ repos, byteStats }: Props) {
   return (
     <div className="space-y-6">
       {/* Donut chart */}
-      <div className="flex flex-col md:flex-row items-center gap-6">
+      <div className="flex flex-col md:flex-row items-center gap-3 md:gap-6">
         <div className="w-full md:w-64 shrink-0" style={{ height: 220 }}>
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>

@@ -20,7 +20,7 @@ export function ReviewsSection({ reviews, isLoading }: Props) {
   if (isLoading) {
     return (
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+        {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-20 sm:h-24 rounded-xl" />)}
       </div>
     );
   }
@@ -42,29 +42,29 @@ export function ReviewsSection({ reviews, isLoading }: Props) {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-card border border-border rounded-xl p-6">
+        <div className="bg-card border border-border rounded-xl p-4 sm:p-6">
           <div className="text-sm text-muted-foreground">Reviews Given</div>
-          <div className="text-3xl font-bold mt-1">{reviews?.totalReviewsGiven ?? 0}</div>
+          <div className="text-2xl sm:text-3xl font-bold mt-1">{reviews?.totalReviewsGiven ?? 0}</div>
         </div>
-        <div className="bg-card border border-border rounded-xl p-6">
+        <div className="bg-card border border-border rounded-xl p-4 sm:p-6">
           <div className="text-sm text-muted-foreground">Approved</div>
-          <div className="text-3xl font-bold mt-1 text-green-500">{reviews?.approved ?? 0}</div>
+          <div className="text-2xl sm:text-3xl font-bold mt-1 text-green-500">{reviews?.approved ?? 0}</div>
         </div>
-        <div className="bg-card border border-border rounded-xl p-6">
+        <div className="bg-card border border-border rounded-xl p-4 sm:p-6">
           <div className="text-sm text-muted-foreground">Changes Requested</div>
-          <div className="text-3xl font-bold mt-1 text-yellow-500">{reviews?.changesRequested ?? 0}</div>
+          <div className="text-2xl sm:text-3xl font-bold mt-1 text-yellow-500">{reviews?.changesRequested ?? 0}</div>
         </div>
-        <div className="bg-card border border-border rounded-xl p-6">
+        <div className="bg-card border border-border rounded-xl p-4 sm:p-6">
           <div className="text-sm text-muted-foreground">Avg Reviews / PR</div>
-          <div className="text-3xl font-bold mt-1">{(reviews?.avgReviewsPerPR ?? 0).toFixed(1)}</div>
+          <div className="text-2xl sm:text-3xl font-bold mt-1">{(reviews?.avgReviewsPerPR ?? 0).toFixed(1)}</div>
         </div>
       </div>
 
       <div className="bg-card border border-border rounded-xl p-6">
         <h2 className="font-semibold mb-4">Review Breakdown</h2>
-        <div className="flex items-center gap-8 flex-wrap">
-          <div className="flex-shrink-0">
-            <ResponsiveContainer width={220} height={220}>
+        <div className="flex items-center gap-4 sm:gap-8 flex-wrap">
+          <div className="flex-shrink-0 w-full sm:w-[220px]">
+            <ResponsiveContainer width="100%" height={220}>
               <PieChart>
                 <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={95} paddingAngle={3} dataKey="value" strokeWidth={0}>
                   {pieData.map((entry) => (
@@ -75,7 +75,7 @@ export function ReviewsSection({ reviews, isLoading }: Props) {
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <div className="flex-1 space-y-3 min-w-[180px]">
+          <div className="flex-1 min-w-0 space-y-3">
             {pieData.map(({ name, value, color }) => {
               const total = reviews?.totalReviewsGiven || 1;
               const pct = Math.round((value / total) * 100);

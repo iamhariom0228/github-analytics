@@ -39,7 +39,7 @@ export function DateRangePicker({ value, onChange }: Props) {
   };
 
   return (
-    <div className="flex gap-1 bg-muted/50 rounded-lg p-1">
+    <div className="flex flex-wrap gap-1 bg-muted/50 rounded-lg p-1">
       {PRESETS.map((p) => (
         <button
           key={p.label}

@@ -101,7 +101,7 @@ interface CompareCardProps {
 
 function CompareCard({ label, aValue, bValue, pct, aLabel, bLabel, isLoading, inverse }: CompareCardProps) {
   return (
-    <div className="bg-card border border-border rounded-xl p-5">
+    <div className="bg-card border border-border rounded-xl p-4 sm:p-5">
       <div className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-3">{label}</div>
       {isLoading ? (
         <div className="space-y-2">
@@ -111,10 +111,10 @@ function CompareCard({ label, aValue, bValue, pct, aLabel, bLabel, isLoading, in
       ) : (
         <>
           <div className="flex items-end gap-3 mb-2">
-            <div className="text-2xl font-bold">{aValue}</div>
+            <div className="text-xl sm:text-2xl font-bold">{aValue}</div>
             <DeltaBadge pct={pct} inverse={inverse} />
           </div>
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <div className="flex items-center justify-between gap-1 flex-wrap text-xs text-muted-foreground">
             <span><span className="font-medium text-foreground/80">{aLabel}:</span> {aValue}</span>
             <span><span className="font-medium text-foreground/80">{bLabel}:</span> {bValue}</span>
           </div>

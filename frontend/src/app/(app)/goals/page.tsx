@@ -225,7 +225,7 @@ export default function GoalsPage() {
       {isLoading || !mounted ? (
         <Skeleton className="h-24 rounded-xl" />
       ) : (
-        <div className="bg-card border border-border rounded-xl p-5 flex items-center gap-6 flex-wrap">
+        <div className="bg-card border border-border rounded-xl p-5 flex items-center gap-4 sm:gap-6 flex-wrap">
           <div className="flex items-center gap-3">
             <Target className="w-6 h-6 text-primary" />
             <div>

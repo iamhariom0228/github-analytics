@@ -84,11 +84,11 @@ export default function AnalyticsPage() {
       {shareResult && (
         <div className="bg-green-500/10 border border-green-500/30 rounded-xl px-4 py-3 text-sm flex items-center justify-between">
           <span className="text-green-600">Snapshot created! Share this link:</span>
-          <a href={shareResult.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-mono text-xs">{typeof window !== "undefined" ? window.location.origin : ""}{shareResult.url}</a>
+          <a href={shareResult.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-mono text-xs truncate max-w-[200px] sm:max-w-xs">{typeof window !== "undefined" ? window.location.origin : ""}{shareResult.url}</a>
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         <StatCard label="Commits" value={overview?.commits ?? 0} icon={TrendingUp} isLoading={overviewLoading} />
         <StatCard label="PRs Authored" value={overview?.prsAuthored ?? 0} icon={GitPullRequest} isLoading={overviewLoading} />
         <StatCard label="Reviews Given" value={overview?.reviewsGiven ?? 0} icon={Star} isLoading={overviewLoading} />
@@ -200,12 +200,12 @@ export default function AnalyticsPage() {
       {tab === "Issues" && (
         <div className="space-y-4">
           {repos && repos.length > 1 && (
-            <div className="flex items-center gap-2">
-              <label className="text-sm text-muted-foreground">Repository:</label>
+            <div className="flex items-center gap-2 flex-wrap">
+              <label className="text-sm text-muted-foreground shrink-0">Repository:</label>
               <select
                 value={selectedIssueRepo ?? ""}
                 onChange={(e) => setIssueRepoId(e.target.value)}
-                className="text-sm border border-border rounded-lg px-3 py-1.5 bg-background"
+                className="text-sm border border-border rounded-lg px-3 py-1.5 bg-background min-w-0 max-w-[200px] sm:max-w-none truncate"
               >
                 {repos.map((r) => (
                   <option key={r.id} value={r.id}>{r.fullName}</option>

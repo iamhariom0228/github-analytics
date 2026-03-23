@@ -95,11 +95,11 @@ export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
 
       {/* User */}
       {user && (
-        <div className="px-4 py-3 border-b border-border flex items-center gap-3">
+        <div className="px-4 py-3 border-b border-border flex items-center gap-3 min-w-0">
           {user.avatarUrl && (
-            <img src={user.avatarUrl} alt={user.username} className="w-8 h-8 rounded-full" />
+            <img src={user.avatarUrl} alt={user.username} className="w-8 h-8 rounded-full shrink-0" />
           )}
-          <span className="text-sm font-medium truncate">{user.username}</span>
+          <span className="text-sm font-medium truncate min-w-0">{user.username}</span>
         </div>
       )}
 

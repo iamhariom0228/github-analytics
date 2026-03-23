@@ -45,7 +45,7 @@ export default function DashboardPage() {
           {/* Metric cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Streak — always from all-time dashboard data */}
-            <div className="bg-card border border-border rounded-xl p-6 flex items-center gap-4">
+            <div className="bg-card border border-border rounded-xl p-4 sm:p-6 flex flex-col sm:flex-row items-center gap-3">
               {isLoading ? <Skeleton className="w-16 h-16 rounded-full flex-shrink-0" /> : (() => {
                 const streak = data?.currentStreak ?? 0;
                 const pct = Math.min(streak / 30, 1);
@@ -65,7 +65,7 @@ export default function DashboardPage() {
                   </div>
                 );
               })()}
-              <div>
+              <div className="min-w-0 text-center sm:text-left">
                 <div className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Contribution Streak</div>
                 {isLoading ? <Skeleton className="h-8 w-16 mt-1" /> : (
                   <div className="text-3xl font-bold">{data?.currentStreak ?? 0} <span className="text-base font-normal text-muted-foreground">days</span></div>
@@ -137,9 +137,9 @@ export default function DashboardPage() {
                   const pct = Math.round((value / total) * 100);
                   return (
                     <div key={label} className="space-y-1.5">
-                      <div className="flex justify-between text-sm">
+                      <div className="flex justify-between gap-2 flex-wrap text-sm">
                         <span className="text-muted-foreground">{label}</span>
-                        <span className={`font-semibold ${textColor}`}>{sign}{value.toLocaleString()} <span className="font-normal text-muted-foreground">({pct}%)</span></span>
+                        <span className={`font-semibold ${textColor} shrink-0`}>{sign}{value.toLocaleString()} <span className="font-normal text-muted-foreground">({pct}%)</span></span>
                       </div>
                       <div className="h-2 bg-muted rounded-full overflow-hidden">
                         <div className={`h-full ${color} rounded-full transition-all duration-500`} style={{ width: `${pct}%` }} />
@@ -192,7 +192,7 @@ export default function DashboardPage() {
           ) : null}
 
           {/* Recent PRs */}
-          <div className="bg-card border border-border rounded-xl p-6">
+          <div className="bg-card border border-border rounded-xl p-4 sm:p-6">
             <h2 className="font-semibold mb-4">Recent Pull Requests</h2>
             {isLoading ? (
               <div className="space-y-3">

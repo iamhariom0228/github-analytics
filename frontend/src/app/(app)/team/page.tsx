@@ -66,12 +66,12 @@ export default function TeamPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold">Team Analytics</h1>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <DateRangePicker value={preset} onChange={(p) => setPreset(p)} />
           <select
             value={repoId}
             onChange={(e) => { setSelectedRepoId(e.target.value); localStorage.setItem(STORAGE_KEY, e.target.value); }}
-            className="border border-input rounded-md px-3 py-1.5 text-sm bg-background"
+            className="border border-input rounded-md px-3 py-1.5 text-sm bg-background min-w-0 max-w-[200px] sm:max-w-none truncate"
           >
             {repos?.map((r) => (
               <option key={r.id} value={r.id}>{r.fullName}</option>

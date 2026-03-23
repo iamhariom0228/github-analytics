@@ -27,10 +27,10 @@ export function BusFactorCard({ busFactor, isLoading }: Props) {
 
   return (
     <div className="bg-card border border-border rounded-xl p-6">
-      <div className="flex items-center gap-6 flex-wrap">
+      <div className="flex items-center gap-3 sm:gap-6 flex-wrap">
         {/* SVG arc gauge — fixed size, no Recharts stretching */}
-        <div className="relative flex-shrink-0 w-24 h-24">
-          <svg width="96" height="96" viewBox="0 0 96 96" className="-rotate-90">
+        <div className="relative flex-shrink-0 w-20 h-20 sm:w-24 sm:h-24">
+          <svg width="100%" height="100%" viewBox="0 0 96 96" className="-rotate-90">
             <circle cx="48" cy="48" r={r} fill="none" stroke="hsl(var(--muted))" strokeWidth="8" />
             <circle
               cx="48" cy="48" r={r} fill="none"

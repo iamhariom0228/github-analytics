@@ -39,7 +39,7 @@ export function LeaderboardTable({ leaderboard, isLoading, hideHeader, churnMode
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => e.stopPropagation()}
           placeholder="Filter by contributor..."
-          className={`border border-input rounded-md px-3 py-1.5 text-sm bg-background w-48 ${!leaderboard?.length ? "hidden" : ""}`}
+          className={`border border-input rounded-md px-3 py-1.5 text-sm bg-background w-full sm:w-48 ${!leaderboard?.length ? "hidden" : ""}`}
         />
       </div>
 

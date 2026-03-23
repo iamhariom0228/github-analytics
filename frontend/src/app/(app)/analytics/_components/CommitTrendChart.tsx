@@ -17,7 +17,7 @@ interface Props {
 export function CommitTrendChart({ data, isLoading, granularity, onGranularityChange }: Props) {
   return (
     <div className="bg-card border border-border rounded-xl p-6">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between gap-2 flex-wrap mb-4">
         <h2 className="font-semibold">Commit Activity</h2>
         <div className="flex gap-0 text-xs border border-border rounded-md overflow-hidden">
           {(["daily", "weekly"] as const).map((g) => (

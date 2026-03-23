@@ -32,7 +32,7 @@ export default function RepoDetailPage({ params }: { params: { id: string } }) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 min-w-0">
           <Link href="/repos" className="p-1.5 hover:bg-muted rounded-md transition-colors shrink-0">
             <ArrowLeft className="w-4 h-4" />
@@ -56,7 +56,7 @@ export default function RepoDetailPage({ params }: { params: { id: string } }) {
 
       {/* Quick stats */}
       {repo && (
-        <div className="flex items-center gap-4 flex-wrap text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 sm:gap-4 flex-wrap text-sm text-muted-foreground">
           {(repo.stars ?? 0) > 0 && (
             <span className="flex items-center gap-1"><Star className="w-3.5 h-3.5" />{repo.stars!.toLocaleString()} stars</span>
           )}

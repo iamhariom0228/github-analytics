@@ -31,21 +31,21 @@ export function PRLifecycleSection({ lifecycle, lifecycleLoading, sizeChartData,
           [...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)
         ) : (
           <>
-            <div className="bg-card border border-border rounded-xl p-6">
+            <div className="bg-card border border-border rounded-xl p-4 sm:p-6">
               <div className="text-sm text-muted-foreground">Avg. Time to First Review</div>
-              <div className="text-3xl font-bold mt-1">{formatHours(lifecycle?.avgHoursToFirstReview ?? 0)}</div>
+              <div className="text-2xl sm:text-3xl font-bold mt-1">{formatHours(lifecycle?.avgHoursToFirstReview ?? 0)}</div>
             </div>
-            <div className="bg-card border border-border rounded-xl p-6">
+            <div className="bg-card border border-border rounded-xl p-4 sm:p-6">
               <div className="text-sm text-muted-foreground">Avg. Time to Merge</div>
-              <div className="text-3xl font-bold mt-1">{formatHours(lifecycle?.avgHoursToMerge ?? 0)}</div>
+              <div className="text-2xl sm:text-3xl font-bold mt-1">{formatHours(lifecycle?.avgHoursToMerge ?? 0)}</div>
             </div>
-            <div className="bg-card border border-border rounded-xl p-6">
+            <div className="bg-card border border-border rounded-xl p-4 sm:p-6">
               <div className="text-sm text-muted-foreground">PRs Merged</div>
-              <div className="text-3xl font-bold mt-1">{lifecycle?.mergedCount ?? 0}</div>
+              <div className="text-2xl sm:text-3xl font-bold mt-1">{lifecycle?.mergedCount ?? 0}</div>
             </div>
-            <div className="bg-card border border-border rounded-xl p-6">
+            <div className="bg-card border border-border rounded-xl p-4 sm:p-6">
               <div className="text-sm text-muted-foreground">Merge Rate</div>
-              <div className="text-3xl font-bold mt-1">
+              <div className="text-2xl sm:text-3xl font-bold mt-1">
                 {lifecycle?.totalCount ? Math.round((lifecycle.mergedCount / lifecycle.totalCount) * 100) : 0}%
               </div>
             </div>
@@ -57,8 +57,8 @@ export function PRLifecycleSection({ lifecycle, lifecycleLoading, sizeChartData,
         <h2 className="font-semibold mb-6">PR Lifecycle Pipeline</h2>
         <div className="flex items-center gap-0 overflow-x-auto pb-2">
           {/* Stage 1 */}
-          <div className="flex-shrink-0 text-center px-5 py-4 bg-blue-500/10 border border-blue-500/30 rounded-xl min-w-[120px]">
-            <div className="text-3xl font-bold text-blue-500">{lifecycle?.totalCount ?? 0}</div>
+          <div className="flex-shrink-0 text-center px-3 sm:px-5 py-4 bg-blue-500/10 border border-blue-500/30 rounded-xl min-w-[100px] sm:min-w-[120px]">
+            <div className="text-2xl sm:text-3xl font-bold text-blue-500">{lifecycle?.totalCount ?? 0}</div>
             <div className="text-xs text-muted-foreground mt-1 font-medium uppercase tracking-wide">PRs Opened</div>
             <div className="text-xs text-blue-500/70 mt-1">100%</div>
           </div>
@@ -72,8 +72,8 @@ export function PRLifecycleSection({ lifecycle, lifecycleLoading, sizeChartData,
             <div className="text-xs text-muted-foreground mt-1">wait for review</div>
           </div>
           {/* Stage 2 */}
-          <div className="flex-shrink-0 text-center px-5 py-4 bg-violet-500/10 border border-violet-500/30 rounded-xl min-w-[120px]">
-            <div className="text-3xl font-bold text-violet-500">{lifecycle?.totalCount ?? 0}</div>
+          <div className="flex-shrink-0 text-center px-3 sm:px-5 py-4 bg-violet-500/10 border border-violet-500/30 rounded-xl min-w-[100px] sm:min-w-[120px]">
+            <div className="text-2xl sm:text-3xl font-bold text-violet-500">{lifecycle?.totalCount ?? 0}</div>
             <div className="text-xs text-muted-foreground mt-1 font-medium uppercase tracking-wide">In Review</div>
             <div className="text-xs text-violet-500/70 mt-1">avg {formatHours(lifecycle?.avgHoursToFirstReview ?? 0)} wait</div>
           </div>
@@ -87,8 +87,8 @@ export function PRLifecycleSection({ lifecycle, lifecycleLoading, sizeChartData,
             <div className="text-xs text-muted-foreground mt-1">review → merge</div>
           </div>
           {/* Stage 3 */}
-          <div className="flex-shrink-0 text-center px-5 py-4 bg-green-500/10 border border-green-500/30 rounded-xl min-w-[120px]">
-            <div className="text-3xl font-bold text-green-500">{lifecycle?.mergedCount ?? 0}</div>
+          <div className="flex-shrink-0 text-center px-3 sm:px-5 py-4 bg-green-500/10 border border-green-500/30 rounded-xl min-w-[100px] sm:min-w-[120px]">
+            <div className="text-2xl sm:text-3xl font-bold text-green-500">{lifecycle?.mergedCount ?? 0}</div>
             <div className="text-xs text-muted-foreground mt-1 font-medium uppercase tracking-wide">Merged</div>
             {lifecycle && lifecycle.totalCount > 0 && (
               <div className="text-xs text-green-500/70 mt-1">{Math.round((lifecycle.mergedCount / lifecycle.totalCount) * 100)}% of opened</div>

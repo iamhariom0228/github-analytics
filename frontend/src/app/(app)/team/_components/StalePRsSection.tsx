@@ -31,9 +31,9 @@ export function StalePRsSection({ stalePRs, isLoading }: Props) {
       ) : (
         <div className="space-y-2">
           {stalePRs.map((pr) => (
-            <div key={pr.id} className="flex justify-between items-center p-3 bg-orange-50 border border-orange-200 rounded-lg dark:bg-orange-950/20 dark:border-orange-900/40">
-              <span className="text-sm font-medium">#{pr.prNumber} {pr.title}</span>
-              <span className="text-xs text-orange-600 shrink-0 ml-4">
+            <div key={pr.id} className="flex justify-between items-center gap-2 p-3 bg-orange-50 border border-orange-200 rounded-lg dark:bg-orange-950/20 dark:border-orange-900/40">
+              <span className="text-sm font-medium min-w-0 truncate">#{pr.prNumber} {pr.title}</span>
+              <span className="text-xs text-orange-600 shrink-0">
                 {formatDistanceToNow(new Date(pr.createdAt), { addSuffix: true })}
               </span>
             </div>

@@ -22,7 +22,9 @@ export function ContributionHeatmapSection({ data, isLoading }: Props) {
           No commits yet — sync a repository to see your coding patterns
         </div>
       ) : (
-        <ContributionHeatmap data={data ?? []} />
+        <div className="overflow-x-auto pb-1">
+          <ContributionHeatmap data={data ?? []} />
+        </div>
       )}
     </div>
   );

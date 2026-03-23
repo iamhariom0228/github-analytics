@@ -305,7 +305,7 @@ export default function AchievementsPage() {
       {isLoading ? (
         <Skeleton className="h-20 rounded-xl" />
       ) : (
-        <div className="bg-card border border-border rounded-xl p-5 flex items-center gap-8 flex-wrap">
+        <div className="bg-card border border-border rounded-xl p-5 flex items-center gap-4 sm:gap-8 flex-wrap">
           <div className="text-center">
             <div className="text-3xl font-bold text-primary">{unlocked.length}</div>
             <div className="text-xs text-muted-foreground mt-0.5">Unlocked</div>
@@ -314,7 +314,7 @@ export default function AchievementsPage() {
             <div className="text-3xl font-bold">{achievements.length}</div>
             <div className="text-xs text-muted-foreground mt-0.5">Total</div>
           </div>
-          <div className="flex-1 min-w-48">
+          <div className="flex-1 min-w-0">
             <div className="flex justify-between text-xs text-muted-foreground mb-1.5">
               <span>Overall progress</span>
               <span>{Math.round((unlocked.length / achievements.length) * 100)}%</span>
