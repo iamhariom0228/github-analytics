@@ -64,6 +64,10 @@ services:
         value: "-Xms128m -Xmx384m -XX:+UseSerialGC -XX:+UseContainerSupport -Djava.security.egd=file:/dev/./urandom"
 
       # ── Optional ──────────────────────────────────────────────────────────
+      - key: SPRING_PROFILES_ACTIVE
+        value: "prod"
+
+      # ── Optional ──────────────────────────────────────────────────────────
       - key: GROQ_API_KEY
         sync: false
 

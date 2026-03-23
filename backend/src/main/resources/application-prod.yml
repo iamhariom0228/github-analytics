@@ -1,0 +1,6 @@
+# Production profile — loaded when SPRING_PROFILES_ACTIVE=prod
+logging:
+  level:
+    com.gitanalytics: INFO
+    org.springframework.security: WARN
+    org.springframework.web: WARN
