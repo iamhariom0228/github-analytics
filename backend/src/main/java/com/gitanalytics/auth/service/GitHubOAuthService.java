@@ -2,9 +2,7 @@ package com.gitanalytics.auth.service;
 
 import com.gitanalytics.auth.dto.GitHubUserDto;
 import com.gitanalytics.auth.entity.User;
-import com.gitanalytics.auth.entity.UserPreferences;
 import com.gitanalytics.auth.dao.UserDao;
-import com.gitanalytics.auth.repository.UserPreferencesRepository;
 import com.gitanalytics.shared.config.AppProperties;
 import com.gitanalytics.shared.exception.UnauthorizedException;
 import com.gitanalytics.shared.util.EncryptionUtil;
@@ -30,7 +28,6 @@ public class GitHubOAuthService {
     private final AppProperties appProperties;
     private final RedisTemplate<String, Object> redisTemplate;
     private final UserDao userDao;
-    private final UserPreferencesRepository userPreferencesRepository;
     private final EncryptionUtil encryptionUtil;
     private final WebClient.Builder webClientBuilder;
 
@@ -117,15 +114,7 @@ public class GitHubOAuthService {
                 .accessTokenEncrypted(encryptedToken)
                 .build());
 
-        User savedUser = userDao.save(user);
-
-        // Create default preferences if new user
-        userPreferencesRepository.findByUserId(savedUser.getId())
-            .orElseGet(() -> userPreferencesRepository.save(
-                UserPreferences.builder().user(savedUser).build()
-            ));
-
-        return savedUser;
+        return userDao.save(user);
     }
 
     public String decryptAccessToken(User user) {

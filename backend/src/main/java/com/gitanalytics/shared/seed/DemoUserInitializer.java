@@ -1,8 +1,6 @@
 package com.gitanalytics.shared.seed;
 
 import com.gitanalytics.auth.entity.User;
-import com.gitanalytics.auth.entity.UserPreferences;
-import com.gitanalytics.auth.repository.UserPreferencesRepository;
 import com.gitanalytics.auth.repository.UserRepository;
 import com.gitanalytics.shared.util.EncryptionUtil;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +24,6 @@ public class DemoUserInitializer implements ApplicationRunner {
     static final long DEMO_GITHUB_ID = 999_999L;
 
     private final UserRepository userRepository;
-    private final UserPreferencesRepository userPreferencesRepository;
     private final EncryptionUtil encryptionUtil;
 
     @Override
@@ -42,10 +39,6 @@ public class DemoUserInitializer implements ApplicationRunner {
                 .email("demo@example.com")
                 .avatarUrl("https://avatars.githubusercontent.com/u/583231")
                 .accessTokenEncrypted(encryptionUtil.encrypt("demo-token-not-real"))
-                .build());
-
-        userPreferencesRepository.save(UserPreferences.builder()
-                .user(demo)
                 .build());
 
         log.info("Demo user created (id={})", demo.getId());

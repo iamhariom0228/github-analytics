@@ -3,8 +3,6 @@ package com.gitanalytics.analytics;
 import com.gitanalytics.analytics.dto.*;
 import com.gitanalytics.analytics.service.AnalyticsService;
 import com.gitanalytics.auth.entity.User;
-import com.gitanalytics.auth.entity.UserPreferences;
-import com.gitanalytics.auth.repository.UserPreferencesRepository;
 import com.gitanalytics.auth.repository.UserRepository;
 import com.gitanalytics.ingestion.entity.*;
 import com.gitanalytics.ingestion.repository.*;
@@ -56,7 +54,6 @@ class AnalyticsIntegrationTest {
 
     @Autowired private AnalyticsService analyticsService;
     @Autowired private UserRepository userRepository;
-    @Autowired private UserPreferencesRepository userPreferencesRepository;
     @Autowired private TrackedRepoRepository trackedRepoRepository;
     @Autowired private CommitRepository commitRepository;
     @Autowired private PullRequestRepository pullRequestRepository;
@@ -77,10 +74,6 @@ class AnalyticsIntegrationTest {
             .accessTokenEncrypted("dGVzdA==") // base64 placeholder
             .build());
         userId = user.getId();
-
-        userPreferencesRepository.save(UserPreferences.builder()
-            .user(user).digestEnabled(true).digestDayOfWeek(1).digestHour(9).timezone("UTC")
-            .build());
 
         TrackedRepo repo = trackedRepoRepository.save(TrackedRepo.builder()
             .user(user).owner("test-user").name("test-repo")

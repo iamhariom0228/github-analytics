@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS digest_logs CASCADE;
+DROP TABLE IF EXISTS user_preferences CASCADE;

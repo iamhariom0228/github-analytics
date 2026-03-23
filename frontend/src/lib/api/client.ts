@@ -42,7 +42,6 @@ import type {
   ContributorStats,
   BusFactor,
   Streak,
-  DigestPreferences,
   GitHubRepoSuggestion,
   PrSummary,
   Insight,
@@ -176,18 +175,6 @@ export const getAiSummary = (timezone?: string, from?: string, to?: string) =>
   apiClient
     .get<ApiResponse<AiSummary>>("/analytics/ai-summary", { params: { timezone, from, to } })
     .then(unwrap);
-
-// Digest
-export const getDigestPreferences = () =>
-  apiClient.get<ApiResponse<DigestPreferences>>("/digest/preferences").then(unwrap);
-
-export const updateDigestPreferences = (prefs: DigestPreferences) =>
-  apiClient
-    .put<ApiResponse<DigestPreferences>>("/digest/preferences", prefs)
-    .then(unwrap);
-
-export const sendDigestPreview = () =>
-  apiClient.post<ApiResponse<void>>("/digest/preview").then(unwrap);
 
 export const deleteAccount = () =>
   apiClient.delete<ApiResponse<void>>("/auth/account").then(unwrap);

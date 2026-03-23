@@ -94,13 +94,6 @@ export interface Streak {
   longestStreak: number;
 }
 
-export interface DigestPreferences {
-  digestEnabled: boolean;
-  digestDayOfWeek: number;
-  digestHour: number;
-  timezone: string;
-}
-
 export interface Insight {
   message: string;
   type: "positive" | "warning" | "info";
