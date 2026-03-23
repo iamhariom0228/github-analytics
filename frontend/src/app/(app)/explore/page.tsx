@@ -427,7 +427,7 @@ export default function ExplorePage() {
             </div>
           )}
 
-          <div className="bg-primary/10 border border-primary/30 rounded-xl p-5 flex items-center justify-between gap-4">
+          <div className="bg-primary/10 border border-primary/30 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <div className="font-semibold text-sm">Track this repo with full analytics</div>
               <div className="text-muted-foreground text-xs mt-0.5">

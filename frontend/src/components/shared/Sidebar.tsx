@@ -20,6 +20,7 @@ import {
   GitCompareArrows,
   Network,
   Keyboard,
+  X,
 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
@@ -44,7 +45,12 @@ const navItems = [
   { href: "/settings", icon: Settings, label: "Settings" },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+}
+
+export function Sidebar({ isOpen = false, onClose }: SidebarProps) {
   const pathname = usePathname();
   const qc = useQueryClient();
   const { data: user } = useAuth();
@@ -63,20 +69,28 @@ export function Sidebar() {
     },
   });
 
-  return (
-    <>
-    <ShortcutCheatsheet open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
-    <aside className="w-64 border-r border-border bg-card flex flex-col h-screen sticky top-0">
+  const sidebarContent = (
+    <aside className="w-64 border-r border-border bg-card flex flex-col h-full">
       {/* Brand */}
-      <div className="p-6 border-b border-border flex items-center justify-between">
+      <div className="p-4 md:p-6 border-b border-border flex items-center justify-between">
         <span className="font-bold text-lg">GitHub Analytics</span>
-        <button
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          className="p-1.5 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-          aria-label="Toggle theme"
-        >
-          {mounted && theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            className="p-1.5 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            aria-label="Toggle theme"
+          >
+            {mounted && theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
+          {/* Close button — mobile only */}
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors md:hidden"
+            aria-label="Close menu"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* User */}
@@ -95,6 +109,7 @@ export function Sidebar() {
           <Link
             key={href}
             href={href}
+            onClick={onClose}
             className={cn(
               "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors",
               pathname === href
@@ -127,6 +142,32 @@ export function Sidebar() {
         </button>
       </div>
     </aside>
+  );
+
+  return (
+    <>
+      <ShortcutCheatsheet open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+
+      {/* Desktop sidebar — always visible */}
+      <div className="hidden md:flex h-screen sticky top-0 flex-shrink-0">
+        {sidebarContent}
+      </div>
+
+      {/* Mobile drawer overlay */}
+      {isOpen && (
+        <div className="md:hidden fixed inset-0 z-50 flex">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={onClose}
+            aria-hidden="true"
+          />
+          {/* Drawer */}
+          <div className="relative z-10 h-full overflow-y-auto">
+            {sidebarContent}
+          </div>
+        </div>
+      )}
     </>
   );
 }

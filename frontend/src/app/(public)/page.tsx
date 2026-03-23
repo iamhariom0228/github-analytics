@@ -15,11 +15,11 @@ export default function LandingPage() {
       </nav>
 
       {/* Hero */}
-      <section className="max-w-4xl mx-auto px-6 py-24 text-center">
-        <h1 className="text-5xl font-bold mb-6 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+      <section className="max-w-4xl mx-auto px-6 py-14 sm:py-24 text-center">
+        <h1 className="text-3xl sm:text-5xl font-bold mb-6 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
           Insights GitHub doesn&apos;t show you
         </h1>
-        <p className="text-xl text-gray-400 mb-10 max-w-2xl mx-auto">
+        <p className="text-base sm:text-xl text-gray-400 mb-10 max-w-2xl mx-auto">
           PR lifecycle timing, contribution heatmaps, team leaderboards, review turnaround metrics,
           bus-factor detection, and weekly email digests — all in one dashboard.
         </p>
